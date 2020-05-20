@@ -11,6 +11,7 @@ import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.colors.EditorColorsListener
+import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.colors.EditorColorsScheme
 import com.intellij.openapi.editor.markup.EffectType
 import com.intellij.openapi.editor.markup.TextAttributes
@@ -18,32 +19,24 @@ import com.intellij.openapi.fileTypes.SyntaxHighlighterFactory
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
+import com.intellij.psi.tree.IElementType
 import com.intellij.util.xmlb.XmlSerializerUtil.copyBean
 import org.jetbrains.annotations.Nullable
 import java.awt.Color
 
-
-class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycleListener, HighlightVisitor, TextEditorHighlightingPassFactory,
-    TextEditorHighlightingPassFactoryRegistrar, EditorColorsListener {
-  private var baseLanguage: String? = null
+class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycleListener, HighlightVisitor,
+    TextEditorHighlightingPassFactory, TextEditorHighlightingPassFactoryRegistrar, EditorColorsListener {
   private val ligatureHighlight: HighlightInfoType = HighlightInfoType
           .HighlightInfoTypeImpl(HighlightSeverity.INFORMATION, DefaultLanguageHighlighterColors.CONSTANT)
 
-  override fun appFrameCreated(commandLineArgs: MutableList<String>) {
-    println("*** appFrameCreated")
-  }
+  override fun appFrameCreated(commandLineArgs: MutableList<String>) {}
 
-  override fun suitableForFile(file: PsiFile): Boolean {
-    println("*** suitableForFile, ${file.name}")
+  override fun suitableForFile(file: PsiFile): Boolean = true
 
-    return true
-  }
-
-  override fun analyze(
-      file: PsiFile, updateWholeFile: Boolean, holder: HighlightInfoHolder, action: Runnable
+  override fun analyze(file: PsiFile, updateWholeFile: Boolean, holder: HighlightInfoHolder, action: Runnable
   ): Boolean {
     println("******** analyze, ${file.name}, ${file.textLength} ********")
-    baseLanguage = file.language.id
+    action.run()
     searchForLigatures(file, holder)
     println("******** analyze-done, ${file.name} ********")
 
@@ -54,35 +47,31 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
   private fun searchForLigatures(file: PsiFile, holder: HighlightInfoHolder) {
     val text = file.text
-    var match: MatchResult? = null
+    val syntaxHighlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(file.language, file.project, file.virtualFile)
+    val defaultForeground = EditorColorsManager.getInstance().globalScheme.defaultForeground
     var index = 0
-    var syntaxHighlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(file.language, null, null)
+    var match: MatchResult? = null
     var phase = 0
 
-    while ({ match = globalMatchLigatures.find(text, index); match }() != null) {
-      println("match: ${match!!.groupValues[0]}")
+    while ({ match = globalMatchLigatures.find(text, index); match }() != null && index < text.length) {
       val matchIndex = match!!.range.first
+      val matchText = match!!.groupValues[0]
       val elem = file.findElementAt(matchIndex)
 
       if (elem != null) {
-        var displayText = elem.text.replace(Regex("""\r\n|\r|\n"""), "↵ ")
-        val matchText = match!!.groupValues[0]
         val type = elem.node.elementType
         val textAttrKeys = syntaxHighlighter.getTokenHighlights(type)
-        val fontType = if (textAttrKeys.isNotEmpty()) textAttrKeys[0].defaultAttributes.fontType else 0
-        val color = if (textAttrKeys.isNotEmpty()) textAttrKeys[0].defaultAttributes.foregroundColor ?: Color.black else Color.black
+        val textAttrs = if (textAttrKeys.isNotEmpty()) holder.colorsScheme.getAttributes(textAttrKeys[0]) else null
+        val color = textAttrs?.foregroundColor ?: defaultForeground
         val colors = getMatchingColors(color)
+        val fontType = textAttrs?.fontType ?: 0
 
-        if (displayText.length > 40)
-          displayText = displayText.substring(0, 40)
-        // println("visit: ${elem.containingFile.fileType.name}, $baseLanguage, ${elem.language}, $type, $displayText")
-
-        if (type.toString().contains(Regex("""(\b|(?:_))(STRING|COMMENT)(\b|(?:_))""", RegexOption.IGNORE_CASE))) {
+        if (shouldSuppressLigature(type)) {
           for (i in matchText.indices) {
-            holder?.add(
+            holder.add(
               HighlightInfo
               .newHighlightInfo(ligatureHighlight)
-              .textAttributes(TextAttributes(if (phase == 0) colors.phase0 else colors.phase1, null, null, EffectType.BOXED, fontType))
+              .textAttributes(TextAttributes(colors[phase], null, null, EffectType.BOXED, fontType))
               .range(elem, matchIndex + i, matchIndex + i + 1)
               .create())
             phase = phase xor 1
@@ -90,12 +79,12 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         }
       }
 
-      index = (match!!.range.first + match!!.groupValues[0].length).coerceAtLeast(index + 1)
-      // println("index: $index");
-
-      if (index > text.length)
-        break
+      index = (matchIndex + matchText.length).coerceAtLeast(index + 1)
     }
+  }
+
+  private fun shouldSuppressLigature(type: IElementType): Boolean {
+    return type.toString().contains(Regex("""(\b|(?:_))(STRING|COMMENT)(\b|(?:_))""", RegexOption.IGNORE_CASE))
   }
 
   override fun clone(): HighlightVisitor = LigaturesLimited()
@@ -125,8 +114,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     // Do nothing
   }
 
-  data class ColorPair(val phase0: Color, val phase1: Color)
-
   companion object {
     private val baseLigatures = ("""
 
@@ -151,20 +138,20 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       println(globalMatchLigatures.matches("0xB"))
     }
 
-    private val cachedColors: MutableMap<Color, ColorPair> = HashMap()
+    private val cachedColors: MutableMap<Color, Array<Color>> = HashMap()
 
-    fun getMatchingColors(color: Color): ColorPair {
+    fun getMatchingColors(color: Color): Array<Color> {
       if (!cachedColors.containsKey(color)) {
         val alpha = color.rgb and 0xFF000000.toInt()
         val rgb = color.rgb and 0x00FFFFFF
 
         if (color.blue > 253)
-          cachedColors[color] = ColorPair(Color(alpha or (rgb - 1)), Color(alpha or (rgb - 2)))
+          cachedColors[color] = arrayOf(Color(alpha or (rgb - 1)), Color(alpha or (rgb - 2)))
         else
-          cachedColors[color] = ColorPair(Color(alpha or (rgb + 1)), Color(alpha or (rgb + 2)))
+          cachedColors[color] = arrayOf(Color(alpha or (rgb + 1)), Color(alpha or (rgb + 2)))
       }
 
-      return cachedColors[color] ?: error("Colors not found")
+      return cachedColors[color]!!
     }
   }
 }
