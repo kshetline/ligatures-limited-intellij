@@ -20,39 +20,14 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.util.xmlb.XmlSerializerUtil.copyBean
 import org.jetbrains.annotations.Nullable
+import java.awt.Color
 
 
 class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycleListener, HighlightVisitor, TextEditorHighlightingPassFactory,
     TextEditorHighlightingPassFactoryRegistrar, EditorColorsListener {
-  private var highlightInfoHolder : HighlightInfoHolder? = null
   private var baseLanguage: String? = null
   private val ligatureHighlight: HighlightInfoType = HighlightInfoType
           .HighlightInfoTypeImpl(HighlightSeverity.INFORMATION, DefaultLanguageHighlighterColors.CONSTANT)
-
-  companion object {
-    private val baseLigatures = ("""
-
-.= .- := =:= == != === !== =/= <-< <<- <-- <- <-> -> --> ->> >-> <=< <<= <== <=> => ==>
-=>> >=> >>= >>- >- <~> -< -<< =<< <~~ <~ ~~ ~> ~~> <<< << <= <> >= >> >>> {. {| [| <: :> |] |} .}
-<||| <|| <| <|> |> ||> |||> <$ <$> $> <+ <+> +> <* <*> *> \\ \\\ \* /* */ /// // <// <!-- </> --> />
-;; :: ::: .. ... ..< !! ?? %% && || ?. ?: ++ +++ -- --- ** *** ~= ~- www ff fi fl ffi ffl 0xF 9x9
--~ ~@ ^= ?= /= /== |= ||= #! ## ### #### #{ #[ ]# #( #? #_ #_(
-
-""").trim().split(Regex("""\s+"""))
-    private val escapeRegex = Regex("""[-\[\]\/{}()*+?.\\^$|]""")
-    private val globalMatchLigatures: Regex
-
-    init {
-      val sorted = baseLigatures.sortedWith(Comparator { a, b -> b.length - a.length })
-      val escaped = sorted.map{ lg -> (lg.replace(escapeRegex) { matchResult -> "\\" + matchResult.value })
-            .replace("0xF", "0x[0-9a-fA-F]")
-            .replace("9x9", "\\dx\\d") }
-      globalMatchLigatures = Regex(escaped.joinToString("|"))
-      println(globalMatchLigatures)
-      println(globalMatchLigatures.matches(":"))
-      println(globalMatchLigatures.matches("0xB"))
-    }
-  }
 
   override fun appFrameCreated(commandLineArgs: MutableList<String>) {
     println("*** appFrameCreated")
@@ -68,11 +43,9 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       file: PsiFile, updateWholeFile: Boolean, holder: HighlightInfoHolder, action: Runnable
   ): Boolean {
     println("******** analyze, ${file.name}, ${file.textLength} ********")
-    highlightInfoHolder = holder
     baseLanguage = file.language.id
     searchForLigatures(file, holder)
     println("******** analyze-done, ${file.name} ********")
-    highlightInfoHolder = null
 
     return true
   }
@@ -97,6 +70,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         val type = elem.node.elementType
         val textAttrKeys = syntaxHighlighter.getTokenHighlights(type)
         val fontType = if (textAttrKeys.isNotEmpty()) textAttrKeys[0].defaultAttributes.fontType else 0
+        val color = if (textAttrKeys.isNotEmpty()) textAttrKeys[0].defaultAttributes.foregroundColor ?: Color.black else Color.black
+        val colors = getMatchingColors(color)
 
         if (displayText.length > 40)
           displayText = displayText.substring(0, 40)
@@ -104,11 +79,10 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
         if (type.toString().contains(Regex("""(\b|(?:_))(STRING|COMMENT)(\b|(?:_))""", RegexOption.IGNORE_CASE))) {
           for (i in matchText.indices) {
-            println("$matchText, $fontType")
-            highlightInfoHolder?.add(
+            holder?.add(
               HighlightInfo
               .newHighlightInfo(ligatureHighlight)
-              .textAttributes(TextAttributes(null, null, null, EffectType.BOXED, (if (phase == 0) 0x2000 else 0x4000) + fontType))
+              .textAttributes(TextAttributes(if (phase == 0) colors.phase0 else colors.phase1, null, null, EffectType.BOXED, fontType))
               .range(elem, matchIndex + i, matchIndex + i + 1)
               .create())
             phase = phase xor 1
@@ -149,5 +123,48 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
   override fun globalSchemeChange(scheme: EditorColorsScheme?) {
     // Do nothing
+  }
+
+  data class ColorPair(val phase0: Color, val phase1: Color)
+
+  companion object {
+    private val baseLigatures = ("""
+
+.= .- := =:= == != === !== =/= <-< <<- <-- <- <-> -> --> ->> >-> <=< <<= <== <=> => ==>
+=>> >=> >>= >>- >- <~> -< -<< =<< <~~ <~ ~~ ~> ~~> <<< << <= <> >= >> >>> {. {| [| <: :> |] |} .}
+<||| <|| <| <|> |> ||> |||> <$ <$> $> <+ <+> +> <* <*> *> \\ \\\ \* /* */ /// // <// <!-- </> --> />
+;; :: ::: .. ... ..< !! ?? %% && || ?. ?: ++ +++ -- --- ** *** ~= ~- www ff fi fl ffi ffl 0xF 9x9
+-~ ~@ ^= ?= /= /== |= ||= #! ## ### #### #{ #[ ]# #( #? #_ #_(
+
+""").trim().split(Regex("""\s+"""))
+    private val escapeRegex = Regex("""[-\[\]\/{}()*+?.\\^$|]""")
+    private val globalMatchLigatures: Regex
+
+    init {
+      val sorted = baseLigatures.sortedWith(Comparator { a, b -> b.length - a.length })
+      val escaped = sorted.map{ lg -> (lg.replace(escapeRegex) { matchResult -> "\\" + matchResult.value })
+            .replace("0xF", "0x[0-9a-fA-F]")
+            .replace("9x9", "\\dx\\d") }
+      globalMatchLigatures = Regex(escaped.joinToString("|"))
+      println(globalMatchLigatures)
+      println(globalMatchLigatures.matches(":"))
+      println(globalMatchLigatures.matches("0xB"))
+    }
+
+    private val cachedColors: MutableMap<Color, ColorPair> = HashMap()
+
+    fun getMatchingColors(color: Color): ColorPair {
+      if (!cachedColors.containsKey(color)) {
+        val alpha = color.rgb and 0xFF000000.toInt()
+        val rgb = color.rgb and 0x00FFFFFF
+
+        if (color.blue > 253)
+          cachedColors[color] = ColorPair(Color(alpha or (rgb - 1)), Color(alpha or (rgb - 2)))
+        else
+          cachedColors[color] = ColorPair(Color(alpha or (rgb + 1)), Color(alpha or (rgb + 2)))
+      }
+
+      return cachedColors[color] ?: error("Colors not found")
+    }
   }
 }
