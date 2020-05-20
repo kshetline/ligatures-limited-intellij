@@ -6,6 +6,7 @@ import com.intellij.codeInsight.daemon.impl.HighlightInfoType
 import com.intellij.codeInsight.daemon.impl.HighlightVisitor
 import com.intellij.codeInsight.daemon.impl.analysis.HighlightInfoHolder
 import com.intellij.ide.AppLifecycleListener
+import com.intellij.lang.Language
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
@@ -19,7 +20,6 @@ import com.intellij.openapi.fileTypes.SyntaxHighlighterFactory
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
-import com.intellij.psi.tree.IElementType
 import com.intellij.util.xmlb.XmlSerializerUtil.copyBean
 import org.jetbrains.annotations.Nullable
 import java.awt.Color
@@ -66,7 +66,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         val colors = getMatchingColors(color)
         val fontType = textAttrs?.fontType ?: 0
 
-        if (shouldSuppressLigature(type)) {
+        if (shouldSuppressLigature(elem, file.language, matchText, matchIndex)) {
           for (i in matchText.indices) {
             holder.add(
               HighlightInfo
@@ -83,8 +83,12 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     }
   }
 
-  private fun shouldSuppressLigature(type: IElementType): Boolean {
-    return type.toString().contains(Regex("""(\b|(?:_))(STRING|COMMENT)(\b|(?:_))""", RegexOption.IGNORE_CASE))
+  private fun shouldSuppressLigature(element: PsiElement, baseLanguage: Language?,
+      matchText: String, matchIndex: Int): Boolean {
+    val category = ElementCategorizer.categoryFor(element, matchText, matchIndex)
+
+    println("*** $matchText  :  $category");
+    return category != ElementCategory.OPERATOR
   }
 
   override fun clone(): HighlightVisitor = LigaturesLimited()
