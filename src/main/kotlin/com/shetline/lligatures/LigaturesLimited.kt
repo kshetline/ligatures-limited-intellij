@@ -28,6 +28,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     TextEditorHighlightingPassFactory, TextEditorHighlightingPassFactoryRegistrar, EditorColorsListener {
   private val ligatureHighlight: HighlightInfoType = HighlightInfoType
           .HighlightInfoTypeImpl(HighlightSeverity.INFORMATION, DefaultLanguageHighlighterColors.CONSTANT)
+  private val debugCategories = false
 
   override fun appFrameCreated(commandLineArgs: MutableList<String>) {}
 
@@ -47,6 +48,20 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
   private fun searchForLigatures(file: PsiFile, holder: HighlightInfoHolder) {
     val text = file.text
+
+    if (debugCategories) {
+      var index = 0
+
+      while (index < text.length) {
+        val elem = file.findElementAt(index) ?: break
+        val len = elem.textLength
+        val elemText = elem.text.substring(0, len.coerceAtMost(25)).replace(Regex("""\r\n|\r|\n"""), "↵ ")
+
+        println("$elemText ${ElementCategorizer.categoryFor(elem, elem.text, elem.textOffset)}")
+        index = (index + len).coerceAtLeast(index + 1)
+      }
+    }
+
     val syntaxHighlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(file.language, file.project, file.virtualFile)
     val defaultForeground = EditorColorsManager.getInstance().globalScheme.defaultForeground
     var index = 0
@@ -87,8 +102,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       matchText: String, matchIndex: Int): Boolean {
     val category = ElementCategorizer.categoryFor(element, matchText, matchIndex)
 
-    println("*** $matchText  :  $category");
-    return category != ElementCategory.OPERATOR
+    return category != ElementCategory.OPERATOR && category != ElementCategory.PUNCTUATION
   }
 
   override fun clone(): HighlightVisitor = LigaturesLimited()
@@ -137,9 +151,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
             .replace("0xF", "0x[0-9a-fA-F]")
             .replace("9x9", "\\dx\\d") }
       globalMatchLigatures = Regex(escaped.joinToString("|"))
-      println(globalMatchLigatures)
-      println(globalMatchLigatures.matches(":"))
-      println(globalMatchLigatures.matches("0xB"))
     }
 
     private val cachedColors: MutableMap<Color, Array<Color>> = HashMap()

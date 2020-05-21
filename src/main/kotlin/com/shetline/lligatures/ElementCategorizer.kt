@@ -5,6 +5,8 @@ package com.shetline.lligatures
 import com.intellij.psi.PsiElement
 
 enum class ElementCategory {
+  ATTRIBUTE_NAME,
+  ATTRIBUTE_VALUE,
   COMMENT,
   COMMENT_MARKER,
   CONSTANT,
@@ -13,48 +15,80 @@ enum class ElementCategory {
   NUMBER,
   OPERATOR,
   OTHER,
+  PUNCTUATION,
+  REGEXP,
   STRING,
+  TAG,
   TEXT,
   WHITESPACE
 }
 
 class ElementCategorizer {
   companion object {
+    private val opRegex = Regex("""[!-\/:-@\[-^`{-~]+""");
 
     fun categoryFor(element: PsiElement, matchText: String, matchIndex: Int): ElementCategory {
       // Replace underscores with tildes so they act as regex word boundaries.
       val type = element.node.elementType.toString().replace('_', '~').toLowerCase()
+      var isWhitespace = false
 
-      return when {
-        Regex("""\bstring\b""").containsMatchIn(type) -> ElementCategory.STRING
-        Regex("""\bkeyword\b""").containsMatchIn(type) -> ElementCategory.KEYWORD
-        Regex("""\bidentifier\b""").containsMatchIn(type) -> ElementCategory.IDENTIFIER
-        Regex("""\bwhitespace\b""").containsMatchIn(type) -> ElementCategory.WHITESPACE
-        Regex("""\b(float|integer|number)\b""").containsMatchIn(type) -> ElementCategory.NUMBER
-        Regex("""\bconstant\b""").containsMatchIn(type) -> ElementCategory.CONSTANT
-        Regex("""\btext\b""").containsMatchIn(type) -> ElementCategory.TEXT
-        else -> {
-          val text = element.text
-          val elementIndex = element.textOffset;
-          val operatorLike = matchText.length < 8 && Regex("""^[!-\/:-@\[-^`{-~]+$""").matches(matchText)
-          val commentLike = Regex("""\bcomment\b""").containsMatchIn(type)
+      when {
+        Regex("""\bstring\b""").containsMatchIn(type) -> return ElementCategory.STRING
+        Regex("""\bregexp\b""").containsMatchIn(type) -> return ElementCategory.REGEXP
+        Regex("""\bkeyword\b""").containsMatchIn(type) -> return ElementCategory.KEYWORD
+        Regex("""\b(identifier|css~class|css~ident)\b""").containsMatchIn(type) -> return ElementCategory.IDENTIFIER
+        Regex("""\bwhite~space\b""").containsMatchIn(type) -> isWhitespace = true
+        Regex("""\b(float|integer|numeric|number)\b""").containsMatchIn(type) -> return ElementCategory.NUMBER
+        Regex("""\bconstant\b""").containsMatchIn(type) -> return ElementCategory.CONSTANT
+        Regex("""\btext\b""").containsMatchIn(type) -> return ElementCategory.TEXT
+        Regex("""\b(tag~start|tag~end|comma|lpar|rpar|lbrace|rbrace|semicolon|""" +
+          """lbracket|rbracket)\b""").containsMatchIn(type) ||
+          Regex("""['"`]""").matches(matchText) ||
+          element.language.id === "XML" && Regex("""[<\/>]{1,2}""").matches(matchText)
+            -> return ElementCategory.PUNCTUATION
+      }
 
-          if (operatorLike && commentLike) {
-            return if (elementIndex == matchIndex ||
-                       (elementIndex + text.length - matchText.length == matchIndex &&
-                        Regex("""\b(block~comment|c~style~comment)\b""").containsMatchIn(type)))
-              ElementCategory.COMMENT_MARKER
-            else
-              ElementCategory.COMMENT
-          }
+      val text = element.text
+      val elementIndex = element.textOffset;
+      val operatorLike = matchText.length < 8 && opRegex.matches(matchText)
+      val commentLike = Regex("""\bcomment\b""").containsMatchIn(type)
 
-          return when {
-            (commentLike) -> ElementCategory.COMMENT
-            (operatorLike)->  ElementCategory.OPERATOR
-            else -> ElementCategory.OTHER
-          }
+      if (!isWhitespace && operatorLike && commentLike) {
+        return if (elementIndex == matchIndex ||
+                   (elementIndex + text.length - matchText.length == matchIndex &&
+                    Regex("""\b(block~comment|c~style~comment)\b""").containsMatchIn(type)))
+          ElementCategory.COMMENT_MARKER
+        else
+          ElementCategory.COMMENT
+      }
+
+      when {
+        (commentLike) -> return ElementCategory.COMMENT
+        (operatorLike) ->  return ElementCategory.OPERATOR
+      }
+
+      if (element.parent != null) {
+        val parentType = element.parent.node.elementType.toString().replace('_', '~').toLowerCase()
+
+        when (parentType) {
+          "xml~doctype" ->
+            return when {
+              matchText.startsWith("<!") -> ElementCategory.TAG
+              Regex("""^['"]""").containsMatchIn(matchText) -> ElementCategory.ATTRIBUTE_VALUE
+              else -> ElementCategory.ATTRIBUTE_NAME
+            }
+          "xml~attribute" -> return ElementCategory.ATTRIBUTE_NAME
+          "xml~attribute~value" -> return ElementCategory.ATTRIBUTE_VALUE
+          "html~tag" -> return ElementCategory.TAG
+          "xml~tag" -> return ElementCategory.TAG
+          "xml~text" -> return ElementCategory.TEXT
         }
       }
+
+      if (isWhitespace)
+        return ElementCategory.WHITESPACE
+
+      return ElementCategory.OTHER
     }
   }
 }
