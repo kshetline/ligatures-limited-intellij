@@ -28,6 +28,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     TextEditorHighlightingPassFactory, TextEditorHighlightingPassFactoryRegistrar, EditorColorsListener {
   private val ligatureHighlight: HighlightInfoType = HighlightInfoType
           .HighlightInfoTypeImpl(HighlightSeverity.INFORMATION, DefaultLanguageHighlighterColors.CONSTANT)
+  private val settings = LigaturesLimitedSettings.instance
   private val debugCategories = false
 
   override fun appFrameCreated(commandLineArgs: MutableList<String>) {}
@@ -77,8 +78,9 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         val type = elem.node.elementType
         val textAttrKeys = syntaxHighlighter.getTokenHighlights(type)
         val textAttrs = if (textAttrKeys.isNotEmpty()) holder.colorsScheme.getAttributes(textAttrKeys[0]) else null
-        val color = textAttrs?.foregroundColor ?: defaultForeground
+        val color = if (settings.state!!.debug) DEBUG_RED else textAttrs?.foregroundColor ?: defaultForeground
         val colors = getMatchingColors(color)
+        val background = if (settings.state!!.debug) defaultForeground else null;
         val fontType = textAttrs?.fontType ?: 0
 
         if (shouldSuppressLigature(elem, file.language, matchText, matchIndex)) {
@@ -86,12 +88,20 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
             holder.add(
               HighlightInfo
               .newHighlightInfo(ligatureHighlight)
-              .textAttributes(TextAttributes(colors[phase], null, null, EffectType.BOXED, fontType))
+              .textAttributes(TextAttributes(colors[phase], background, null, EffectType.BOXED, fontType))
               .range(elem, matchIndex + i, matchIndex + i + 1)
               .create())
             phase = phase xor 1
           }
         }
+        else if (settings.state!!.debug)
+          holder.add(
+            HighlightInfo
+            .newHighlightInfo(ligatureHighlight)
+            .textAttributes(TextAttributes(DEBUG_GREEN, background, null, EffectType.BOXED, fontType))
+            .range(elem, matchIndex, matchIndex + matchText.length)
+            .create())
+
       }
 
       index = (matchIndex + matchText.length).coerceAtLeast(index + 1)
@@ -145,6 +155,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 """).trim().split(Regex("""\s+"""))
     private val escapeRegex = Regex("""[-\[\]\/{}()*+?.\\^$|]""")
     private val globalMatchLigatures: Regex
+    private val DEBUG_GREEN = Color(0x009900)
+    private val DEBUG_RED = Color(0xDD0000)
 
     init {
       val sorted = baseLigatures.sortedWith(Comparator { a, b -> b.length - a.length })
