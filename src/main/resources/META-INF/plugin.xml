@@ -16,7 +16,11 @@
   </applicationListeners>
 
   <extensions defaultExtensionNs="com.intellij">
+    <applicationConfigurable instance="com.shetline.lligatures.LigaturesLimitedConfig"
+                             groupId="editor" id="com.shetline.lligatures.LigaturesLimited"
+                             displayName="Ligatures Limited"/>
     <applicationService serviceImplementation="com.shetline.lligatures.LigaturesLimited"/>
+    <applicationService serviceImplementation="com.shetline.lligatures.LigaturesLimitedSettings"/>
     <highlightVisitor implementation="com.shetline.lligatures.LigaturesLimited"/>
     <highlightingPassFactory implementation="com.shetline.lligatures.LigaturesLimited"/>
   </extensions>

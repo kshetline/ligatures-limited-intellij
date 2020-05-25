@@ -102,7 +102,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       matchText: String, matchIndex: Int): Boolean {
     val category = ElementCategorizer.categoryFor(element, matchText, matchIndex)
 
-    return category != ElementCategory.OPERATOR && category != ElementCategory.PUNCTUATION
+    return category != ElementCategory.OPERATOR && category != ElementCategory.PUNCTUATION &&
+        category != ElementCategory.COMMENT_MARKER
   }
 
   override fun clone(): HighlightVisitor = LigaturesLimited()
