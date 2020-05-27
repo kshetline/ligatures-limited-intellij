@@ -11,8 +11,7 @@ class HighlightingPass(private var file: PsiFile, private var editor: Editor) : 
   }
 
   override fun doApplyInformationToEditor() {
-    println("doApplyInformationToEditor: ${this.file.findElementAt(0)}, ${this.file.findElementAt(0)?.text?.substr(0, 20)}")
-    this.file.viewProvider.languages.forEach {action -> println(action) }
+    println("doApplyInformationToEditor: ${this.file.name}")
   }
 
   private fun String.substr(start: Int, end: Int): String {

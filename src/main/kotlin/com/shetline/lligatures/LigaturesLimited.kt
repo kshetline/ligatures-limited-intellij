@@ -8,12 +8,18 @@ import com.intellij.codeInsight.daemon.impl.analysis.HighlightInfoHolder
 import com.intellij.ide.AppLifecycleListener
 import com.intellij.lang.Language
 import com.intellij.lang.annotation.HighlightSeverity
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.colors.EditorColorsListener
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.colors.EditorColorsScheme
+import com.intellij.openapi.editor.event.CaretEvent
+import com.intellij.openapi.editor.event.CaretListener
+import com.intellij.openapi.editor.event.EditorFactoryEvent
+import com.intellij.openapi.editor.event.EditorFactoryListener
 import com.intellij.openapi.editor.markup.EffectType
 import com.intellij.openapi.editor.markup.TextAttributes
 import com.intellij.openapi.fileTypes.SyntaxHighlighterFactory
@@ -25,13 +31,16 @@ import org.jetbrains.annotations.Nullable
 import java.awt.Color
 
 class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycleListener, HighlightVisitor,
-    TextEditorHighlightingPassFactory, TextEditorHighlightingPassFactoryRegistrar, EditorColorsListener {
+    TextEditorHighlightingPassFactory, TextEditorHighlightingPassFactoryRegistrar, EditorColorsListener,
+    CaretListener, EditorFactoryListener {
   private val ligatureHighlight: HighlightInfoType = HighlightInfoType
           .HighlightInfoTypeImpl(HighlightSeverity.INFORMATION, DefaultLanguageHighlighterColors.CONSTANT)
   private val settings = LigaturesLimitedSettings.instance
   private val debugCategories = false
 
-  override fun appFrameCreated(commandLineArgs: MutableList<String>) {}
+  override fun appFrameCreated(commandLineArgs: MutableList<String>) {
+    EditorFactory.getInstance().addEditorFactoryListener(this, ApplicationManager.getApplication())
+  }
 
   override fun suitableForFile(file: PsiFile): Boolean = true
 
@@ -80,7 +89,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         val textAttrs = if (textAttrKeys.isNotEmpty()) holder.colorsScheme.getAttributes(textAttrKeys[0]) else null
         val color = if (settings.state!!.debug) DEBUG_RED else textAttrs?.foregroundColor ?: defaultForeground
         val colors = getMatchingColors(color)
-        val background = if (settings.state!!.debug) defaultForeground else null;
+        val background = if (settings.state!!.debug) defaultForeground else null
         val fontType = textAttrs?.fontType ?: 0
 
         if (shouldSuppressLigature(elem, file.language, matchText, matchIndex)) {
@@ -119,6 +128,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   override fun clone(): HighlightVisitor = LigaturesLimited()
 
   override fun createHighlightingPass(file: PsiFile, editor: Editor): TextEditorHighlightingPass? {
+    currentFiles[editor] = file
     return HighlightingPass(file, editor)
   }
 
@@ -130,6 +140,19 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       false,
       false
     )
+  }
+
+  override fun editorCreated(event: EditorFactoryEvent) {
+    event.editor.caretModel.addCaretListener(this)
+  }
+
+  override fun editorReleased(event: EditorFactoryEvent) {
+    currentFiles.remove(event.editor)
+    event.editor.caretModel.removeCaretListener(this)
+  }
+
+  override fun caretPositionChanged(event: CaretEvent) {
+    println(event.newPosition)
   }
 
   @Nullable
@@ -157,6 +180,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private val globalMatchLigatures: Regex
     private val DEBUG_GREEN = Color(0x009900)
     private val DEBUG_RED = Color(0xDD0000)
+    private val currentFiles = HashMap<Editor, PsiFile>()
 
     init {
       val sorted = baseLigatures.sortedWith(Comparator { a, b -> b.length - a.length })
@@ -168,7 +192,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     private val cachedColors: MutableMap<Color, Array<Color>> = HashMap()
 
-    fun getMatchingColors(color: Color): Array<Color> {
+    private fun getMatchingColors(color: Color): Array<Color> {
       if (!cachedColors.containsKey(color)) {
         val alpha = color.rgb and 0xFF000000.toInt()
         val rgb = color.rgb and 0x00FFFFFF

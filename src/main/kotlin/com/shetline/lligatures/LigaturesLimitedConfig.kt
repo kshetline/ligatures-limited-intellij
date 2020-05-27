@@ -1,13 +1,16 @@
 package com.shetline.lligatures
 
+import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.options.Configurable
+import com.intellij.openapi.project.ProjectManager
 import javax.swing.JCheckBox
 import javax.swing.JComponent
 import javax.swing.JPanel
 import javax.swing.JTextField
 
 class LigaturesLimitedConfig : Configurable, Disposable {
+  private lateinit var wrapper: JPanel
   private lateinit var panel: JPanel
   private lateinit var contexts: JTextField
   private lateinit var debug: JCheckBox
@@ -26,10 +29,12 @@ class LigaturesLimitedConfig : Configurable, Disposable {
 
   override fun apply() {
     configState?.debug = debug.isSelected
+    ProjectManager.getInstance().openProjects.forEach()
+      { project -> DaemonCodeAnalyzer.getInstance(project).restart() }
   }
 
   override fun createComponent(): JComponent? {
-    return panel
+    return wrapper
   }
 
   override fun reset() {
