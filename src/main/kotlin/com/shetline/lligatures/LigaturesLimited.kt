@@ -21,6 +21,7 @@ import com.intellij.openapi.editor.event.EditorFactoryListener
 import com.intellij.openapi.editor.markup.*
 import com.intellij.openapi.fileTypes.SyntaxHighlighter
 import com.intellij.openapi.fileTypes.SyntaxHighlighterFactory
+import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
@@ -210,13 +211,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     // Do nothing
   }
 
-  data class HighlightStyling (
-    var type: IElementType,
-    var colors: Array<Color>,
-    var background: Color?,
-    var fontType: Int
-  )
-
   private fun getHighlightStyling(elem: PsiElement, syntaxHighlighter: SyntaxHighlighter,
       colorsScheme: TextAttributesScheme, defaultForeground: Color): HighlightStyling {
     val type = elem.node.elementType
@@ -229,6 +223,20 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     return HighlightStyling(type, colors, background, fontType)
   }
+
+  class HighlightingPass(file: PsiFile, editor: Editor) :
+      TextEditorHighlightingPass(file.project, editor.document, false) {
+    override fun doCollectInformation(progress: ProgressIndicator) {}
+    override fun doApplyInformationToEditor() {}
+  }
+
+  data class HighlightStyling (
+    var type: IElementType,
+    //noinspection
+    var colors: Array<Color>,
+    var background: Color?,
+    var fontType: Int
+  )
 
   companion object {
     private val baseLigatures = ("""
