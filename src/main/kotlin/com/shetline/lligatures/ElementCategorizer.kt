@@ -27,7 +27,7 @@ class ElementCategorizer {
   companion object {
     private val opRegex = Regex("""[!-\/:-@\[-^`{-~]+""");
 
-    fun categoryFor(element: PsiElement, matchText: String, matchIndex: Int): ElementCategory {
+    fun categoryFor(element: PsiElement, matchText: String, matchIndex: Int, count: Int = 0): ElementCategory {
       // Replace underscores with tildes so they act as regex word boundaries.
       val type = element.node.elementType.toString().replace('_', '~').toLowerCase()
       var isWhitespace = false
@@ -87,6 +87,9 @@ class ElementCategorizer {
 
       if (isWhitespace)
         return ElementCategory.WHITESPACE
+
+      if (count < 2 && element.parent != null)
+        return categoryFor(element.parent, matchText, matchIndex, count + 1)
 
       return ElementCategory.OTHER
     }

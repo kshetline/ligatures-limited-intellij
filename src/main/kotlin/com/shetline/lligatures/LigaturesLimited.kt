@@ -28,6 +28,7 @@ import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.tree.IElementType
+import com.intellij.psi.util.elementType
 import com.intellij.util.xmlb.XmlSerializerUtil.copyBean
 import com.shetline.lligatures.LigaturesLimitedSettings.CursorMode
 import org.jetbrains.annotations.Nullable
@@ -233,15 +234,26 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
   private fun getHighlightStyling(elem: PsiElement, syntaxHighlighter: SyntaxHighlighter,
       colorsScheme: TextAttributesScheme, defaultForeground: Color): HighlightStyling {
-    val type = elem.node.elementType
+
+    val type = elem.elementType ?: elem.node.elementType
     val textAttrKeys = syntaxHighlighter.getTokenHighlights(type)
-    val textAttrs = if (textAttrKeys.isNotEmpty()) colorsScheme.getAttributes(textAttrKeys[0]) else null
+    val textAttrs = getTextAttributes(colorsScheme, textAttrKeys)
     val color = if (settings.state!!.debug) DEBUG_RED else textAttrs?.foregroundColor ?: defaultForeground
     val colors = getMatchingColors(color)
     val background = if (settings.state!!.debug) defaultForeground else null
     val fontType = textAttrs?.fontType ?: 0
 
     return HighlightStyling(type, colors, background, fontType)
+  }
+
+  private fun getTextAttributes(colorsScheme: TextAttributesScheme, textAttrKeys: Array<TextAttributesKey>) :
+      TextAttributes? {
+    var textAttrs: TextAttributes? = null
+
+    for (key in textAttrKeys)
+      textAttrs = TextAttributes.merge(textAttrs, colorsScheme.getAttributes(key))
+
+    return textAttrs
   }
 
   class HighlightingPass(file: PsiFile, editor: Editor) :
@@ -269,6 +281,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
 """).trim().split(Regex("""\s+"""))
     private val escapeRegex = Regex("""[-\[\]\/{}()*+?.\\^$|]""")
+    // Comment
     private val globalMatchLigatures: Regex
     private val DEBUG_GREEN = Color(0x009900)
     private val DEBUG_RED = Color(0xDD0000)

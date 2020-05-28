@@ -18,6 +18,7 @@ dependencies {
 
 intellij {
   version = "IU-2019.3.3"
+  updateSinceUntilBuild = false
 }
 
 configure<JavaPluginConvention> {
