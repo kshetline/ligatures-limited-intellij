@@ -10,6 +10,8 @@ import com.intellij.openapi.components.Storage
   storages = [Storage("ligatures-limited.xml")]
 )
 open class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettings.SettingsState> {
+  public enum class CursorMode { OFF, CURSOR, LINE }
+
   private var settingsState: SettingsState = SettingsState()
 
   override fun getState(): SettingsState? {
@@ -22,6 +24,7 @@ open class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedS
 
   class SettingsState {
     var debug = false
+    var cursorMode = CursorMode.CURSOR
   }
 
   companion object {
