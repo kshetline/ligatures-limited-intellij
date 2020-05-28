@@ -13,6 +13,7 @@ import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.editor.DefaultLanguageHighlighterColors
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
+import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.openapi.editor.colors.*
 import com.intellij.openapi.editor.event.CaretEvent
 import com.intellij.openapi.editor.event.CaretListener
@@ -31,6 +32,10 @@ import com.intellij.util.xmlb.XmlSerializerUtil.copyBean
 import com.shetline.lligatures.LigaturesLimitedSettings.CursorMode
 import org.jetbrains.annotations.Nullable
 import java.awt.Color
+import javax.swing.SwingUtilities
+import kotlin.Comparator
+import kotlin.collections.ArrayList
+import kotlin.collections.HashMap
 
 class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycleListener, HighlightVisitor,
     TextEditorHighlightingPassFactory, TextEditorHighlightingPassFactoryRegistrar, EditorColorsListener,
@@ -49,10 +54,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   override fun analyze(
       file: PsiFile, updateWholeFile: Boolean, holder: HighlightInfoHolder, action: Runnable
   ): Boolean {
-    println("******** analyze, ${file.name}, ${file.textLength} ********")
     action.run()
     searchForLigatures(file, holder)
-    println("******** analyze-done, ${file.name} ********")
 
     return true
   }
@@ -62,6 +65,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   private fun searchForLigatures(file: PsiFile, holder: HighlightInfoHolder) {
     val text = file.text
 
+    @Suppress("ConstantConditionIf")
     if (debugCategories) {
       var index = 0
 
@@ -114,6 +118,11 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
       index = (matchIndex + matchText.length).coerceAtLeast(index + 1)
     }
+
+    val editor = currentEditors[file]
+
+    if (editor != null)
+      SwingUtilities.invokeLater() { highlightForCaret(editor, editor.caretModel.logicalPosition) }
   }
 
   private fun shouldSuppressLigature(
@@ -123,13 +132,16 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val category = ElementCategorizer.categoryFor(element, matchText, matchIndex)
 
     return category != ElementCategory.OPERATOR && category != ElementCategory.PUNCTUATION &&
-        category != ElementCategory.COMMENT_MARKER
+        category != ElementCategory.COMMENT_MARKER &&
+        !(category == ElementCategory.NUMBER && Regex("""0x[0-9a-f]""", RegexOption.IGNORE_CASE).matches(matchText))
   }
 
   override fun clone(): HighlightVisitor = LigaturesLimited()
 
   override fun createHighlightingPass(file: PsiFile, editor: Editor): TextEditorHighlightingPass? {
+    currentEditors[file] = editor
     currentFiles[editor] = file
+
     return HighlightingPass(file, editor)
   }
 
@@ -148,17 +160,25 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   }
 
   override fun editorReleased(event: EditorFactoryEvent) {
+    if (currentFiles[event.editor] != null)
+      currentEditors.remove(currentFiles[event.editor])
+
     currentFiles.remove(event.editor)
     cursorHighlights.remove(event.editor)
     event.editor.caretModel.removeCaretListener(this)
   }
 
   override fun caretPositionChanged(event: CaretEvent) {
-    val editor = event.source as Editor
+    highlightForCaret(event.editor, event.caret?.logicalPosition)
+  }
+
+  private fun highlightForCaret(editor: Editor, pos: LogicalPosition?) {
+    if (pos == null)
+      return
+
     val doc = editor.document
     val markupModel = editor.markupModel
     val oldHighlights = cursorHighlights[editor]
-    val pos = event.newPosition
     val mode = settings.state!!.cursorMode
 
     if (oldHighlights != null) {
@@ -230,9 +250,9 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     override fun doApplyInformationToEditor() {}
   }
 
+  @Suppress("ArrayInDataClass")
   data class HighlightStyling (
     var type: IElementType,
-    //noinspection
     var colors: Array<Color>,
     var background: Color?,
     var fontType: Int
@@ -252,6 +272,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private val globalMatchLigatures: Regex
     private val DEBUG_GREEN = Color(0x009900)
     private val DEBUG_RED = Color(0xDD0000)
+    private val currentEditors = HashMap<PsiFile, Editor>()
     private val currentFiles = HashMap<Editor, PsiFile>()
     private val cursorHighlights = HashMap<Editor, List<RangeHighlighter>>()
 
