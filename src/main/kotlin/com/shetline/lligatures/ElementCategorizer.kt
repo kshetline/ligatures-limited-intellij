@@ -25,7 +25,7 @@ enum class ElementCategory {
 
 class ElementCategorizer {
   companion object {
-    private val opRegex = Regex("""[!-\/:-@\[-^`{-~]+""");
+    private val opRegex = Regex("""[!-\/:-@\[-^`{-~]+""")
 
     fun categoryFor(element: PsiElement, matchText: String, matchIndex: Int, count: Int = 0): ElementCategory {
       // Replace underscores with tildes so they act as regex word boundaries.
@@ -49,7 +49,7 @@ class ElementCategorizer {
       }
 
       val text = element.text
-      val elementIndex = element.textOffset;
+      val elementIndex = element.textOffset
       val operatorLike = matchText.length < 8 && opRegex.matches(matchText)
       val commentLike = Regex("""\bcomment\b""").containsMatchIn(type)
 
@@ -68,9 +68,7 @@ class ElementCategorizer {
       }
 
       if (element.parent != null) {
-        val parentType = element.parent.node.elementType.toString().replace('_', '~').toLowerCase()
-
-        when (parentType) {
+        when (element.parent.node.elementType.toString().replace('_', '~').toLowerCase()) {
           "xml~doctype" ->
             return when {
               matchText.startsWith("<!") -> ElementCategory.TAG

@@ -123,7 +123,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val editor = currentEditors[file]
 
     if (editor != null)
-      SwingUtilities.invokeLater() { highlightForCaret(editor, editor.caretModel.logicalPosition) }
+      SwingUtilities.invokeLater { highlightForCaret(editor, editor.caretModel.logicalPosition) }
   }
 
   private fun shouldSuppressLigature(
@@ -183,7 +183,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val mode = settings.state!!.cursorMode
 
     if (oldHighlights != null) {
-      oldHighlights.forEach() { highlight -> markupModel.removeHighlighter(highlight) }
+      oldHighlights.forEach { highlight -> markupModel.removeHighlighter(highlight) }
       cursorHighlights.remove(editor)
     }
 
@@ -196,7 +196,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val defaultForeground = EditorColorsManager.getInstance().globalScheme.defaultForeground
     val newHighlights = ArrayList<RangeHighlighter>()
 
-    globalMatchLigatures.findAll(line).forEach() { lig ->
+    globalMatchLigatures.findAll(line).forEach { lig ->
       if (mode == CursorMode.LINE || (mode == CursorMode.CURSOR && pos.column in lig.range.first..lig.range.last + 1)) {
         val elem = file.findElementAt(lineStart + pos.column)
 
