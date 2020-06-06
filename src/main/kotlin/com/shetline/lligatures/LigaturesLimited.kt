@@ -20,27 +20,22 @@ import com.intellij.openapi.editor.event.CaretListener
 import com.intellij.openapi.editor.event.EditorFactoryEvent
 import com.intellij.openapi.editor.event.EditorFactoryListener
 import com.intellij.openapi.editor.markup.*
-import com.intellij.openapi.fileTypes.SyntaxHighlighter
-import com.intellij.openapi.fileTypes.SyntaxHighlighterFactory
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
-import com.intellij.psi.tree.IElementType
-import com.intellij.psi.util.elementType
 import com.intellij.util.xmlb.XmlSerializerUtil.copyBean
 import com.shetline.lligatures.LigaturesLimitedSettings.CursorMode
 import org.jetbrains.annotations.Nullable
 import java.awt.Color
-import javax.swing.SwingUtilities
 import kotlin.Comparator
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 
 class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycleListener, HighlightVisitor,
-    TextEditorHighlightingPassFactory, TextEditorHighlightingPassFactoryRegistrar, EditorColorsListener,
-    CaretListener, EditorFactoryListener {
+    TextEditorHighlightingPassFactory, TextEditorHighlightingPassFactoryRegistrar, CaretListener,
+    EditorFactoryListener {
   private val ligatureHighlight: HighlightInfoType = HighlightInfoType
     .HighlightInfoTypeImpl(HighlightSeverity.INFORMATION, DefaultLanguageHighlighterColors.CONSTANT)
   private val settings = LigaturesLimitedSettings.instance
@@ -80,8 +75,9 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       }
     }
 
-    val syntaxHighlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(file.language, file.project, file.virtualFile)
-    val defaultForeground = EditorColorsManager.getInstance().globalScheme.defaultForeground
+    val debug = settings.state!!.debug
+    val foreground = if (debug) DEBUG_RED else null
+    val background = if (debug) EditorColorsManager.getInstance().globalScheme.defaultForeground else null
     var index = 0
     var match: MatchResult? = null
     var phase = 0
@@ -91,26 +87,24 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       val matchText = match!!.groupValues[0]
       val elem = file.findElementAt(matchIndex)
 
-      if (elem != null) {
-        val style = getHighlightStyling(elem, syntaxHighlighter, holder.colorsScheme, defaultForeground)
-
+      if (elem != null && elem.language == file.language) {
         if (shouldSuppressLigature(elem, file.language, matchText, matchIndex)) {
           for (i in matchText.indices) {
             holder.add(
               HighlightInfo
                 .newHighlightInfo(ligatureHighlight)
-                .textAttributes(TextAttributes(style.colors[phase], style.background, null, EffectType.BOXED, style.fontType))
+                .textAttributes(TextAttributes(foreground, background, null, EffectType.BOXED, BREAKUP_STYLE[phase]))
                 .range(elem, matchIndex + i, matchIndex + i + 1)
                 .create()
             )
             phase = phase xor 1
           }
         }
-        else if (settings.state!!.debug) {
+        else if (debug) {
           holder.add(
             HighlightInfo
               .newHighlightInfo(ligatureHighlight)
-              .textAttributes(TextAttributes(DEBUG_GREEN, style.background, null, EffectType.BOXED, style.fontType))
+              .textAttributes(TextAttributes(DEBUG_GREEN, background, null, EffectType.BOXED, BREAKUP_STYLE[phase]))
               .range(elem, matchIndex, matchIndex + matchText.length)
               .create()
           )
@@ -123,7 +117,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val editor = currentEditors[file]
 
     if (editor != null)
-      SwingUtilities.invokeLater { highlightForCaret(editor, editor.caretModel.logicalPosition) }
+      ApplicationManager.getApplication().invokeLater { highlightForCaret(editor, editor.caretModel.logicalPosition) }
   }
 
   private fun shouldSuppressLigature(
@@ -192,8 +186,9 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val lineEnd = if (pos.line < doc.lineCount - 1) doc.getLineStartOffset(pos.line + 1) else doc.textLength
     val line = doc.getText(TextRange(lineStart, lineEnd)).trimEnd()
     var phase = 0
-    val syntaxHighlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(file.language, file.project, file.virtualFile)
-    val defaultForeground = EditorColorsManager.getInstance().globalScheme.defaultForeground
+    val debug = settings.state!!.debug
+    val foreground = if (debug) DEBUG_RED else null
+    val background = if (debug) EditorColorsManager.getInstance().globalScheme.defaultForeground else null
     val newHighlights = ArrayList<RangeHighlighter>()
 
     globalMatchLigatures.findAll(line).forEach { lig ->
@@ -201,14 +196,12 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         val elem = file.findElementAt(lineStart + pos.column)
 
         if (elem != null) {
-          val style = getHighlightStyling(elem, syntaxHighlighter, editor.colorsScheme, defaultForeground)
-
           for (i in lig.range) {
             newHighlights.add(markupModel.addRangeHighlighter(
               lineStart + i,
               lineStart + i + 1,
               HighlighterLayer.SELECTION + 100,
-              TextAttributes(style.colors[phase], style.background, null, EffectType.BOXED, style.fontType),
+              TextAttributes(foreground, background, null, EffectType.BOXED, BREAKUP_STYLE[phase]),
               HighlighterTargetArea.EXACT_RANGE
             ))
             phase = phase xor 1
@@ -228,63 +221,48 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     copyBean(state, this)
   }
 
-  override fun globalSchemeChange(scheme: EditorColorsScheme?) {
-    // Do nothing
-  }
-
-  private fun getHighlightStyling(elem: PsiElement, syntaxHighlighter: SyntaxHighlighter,
-      colorsScheme: TextAttributesScheme, defaultForeground: Color): HighlightStyling {
-
-    val type = elem.elementType ?: elem.node.elementType
-    val textAttrKeys = syntaxHighlighter.getTokenHighlights(type)
-    val textAttrs = getTextAttributes(colorsScheme, textAttrKeys)
-    val color = if (settings.state!!.debug) DEBUG_RED else textAttrs?.foregroundColor ?: defaultForeground
-    val colors = getMatchingColors(color)
-    val background = if (settings.state!!.debug) defaultForeground else null
-    val fontType = textAttrs?.fontType ?: 0
-
-    return HighlightStyling(type, colors, background, fontType)
-  }
-
-  private fun getTextAttributes(colorsScheme: TextAttributesScheme, textAttrKeys: Array<TextAttributesKey>) :
-      TextAttributes? {
-    var textAttrs: TextAttributes? = null
-
-    for (key in textAttrKeys)
-      textAttrs = TextAttributes.merge(textAttrs, colorsScheme.getAttributes(key))
-
-    return textAttrs
-  }
-
   class HighlightingPass(file: PsiFile, editor: Editor) :
       TextEditorHighlightingPass(file.project, editor.document, false) {
     override fun doCollectInformation(progress: ProgressIndicator) {}
     override fun doApplyInformationToEditor() {}
   }
 
-  @Suppress("ArrayInDataClass")
-  data class HighlightStyling (
-    var type: IElementType,
-    var colors: Array<Color>,
-    var background: Color?,
-    var fontType: Int
-  )
-
   companion object {
     private val baseLigatures = ("""
 
-.= .- := =:= == != === !== =/= <-< <<- <-- <- <-> -> --> ->> >-> <=< <<= <== <=> => ==>
-=>> >=> >>= >>- >- <~> -< -<< =<< <~~ <~ ~~ ~> ~~> <<< << <= <> >= >> >>> {. {| [| <: :> |] |} .}
-<||| <|| <| <|> |> ||> |||> <$ <$> $> <+ <+> +> <* <*> *> \\ \\\ \* /* */ /// // <// <!-- </> --> />
-;; :: ::: .. ... ..< !! ?? %% && || ?. ?: ++ +++ -- --- ** *** ~= ~- www ff fi fl ffi ffl 0xF 9x9
--~ ~@ ^= ?= /= /== |= ||= #! ## ### #### #{ #[ ]# #( #? #_ #_(
+  .= .- := =:= == != === !== =/= <-< <<- <-- <- <-> -> --> ->> >-> <=< <<= <== <=> => ==>
+  =>> >=> >>= >>- >- <~> -< -<< =<< <~~ <~ ~~ ~> ~~> <<< << <= <> >= >> >>> {. {| [| <: :> |] |} .}
+  <||| <|| <| <|> |> ||> |||> <$ <$> $> <+ <+> +> <* <*> *> \\ \\\ \* /* */ /// // <// <!-- </> --> />
+  ;; :: ::: .. ... ..< !! ?? %% && || ?. ?: ++ +++ -- --- ** *** ~= ~- www ff fi fl ffi ffl
+  -~ ~@ ^= ?= /= /== |= ||= #! ## ### #### #{ #[ ]# #( #? #_ #_( 9x9 0xF 0o7 0b1
+  <==== ==== ====> <====> <--- ---> <---> <~~~ ~~~> <~~~>
 
 """).trim().split(Regex("""\s+"""))
+
+    private val patternSubstitutions = hashMapOf<String, String?>(
+      "<====" to "<={4,}",
+      "====" to "={4,}",
+      "====>" to "={4,}>",
+      "<====>" to "<={4,}>",
+      "<---" to "<-{3,}",
+      "--->" to "-{3,}>",
+      "<--->" to "<-{3,}>",
+      "<~~~" to "<~{3,}",
+      "~~~>" to "~{3,}>",
+      "<~~~>" to "<~{3,}>",
+      "0xF" to "0x[0-9a-fA-F]",
+      "0o7" to "0o[0-7]",
+      "0b1" to "0b[01]",
+      "9x9" to "\\dx\\d",
+      "www" to "\\bwww\\b"
+    )
+
     private val escapeRegex = Regex("""[-\[\]\/{}()*+?.\\^$|]""")
     // Comment
     private val globalMatchLigatures: Regex
     private val DEBUG_GREEN = Color(0x009900)
     private val DEBUG_RED = Color(0xDD0000)
+    private val BREAKUP_STYLE = arrayOf(0x0200, 0x0400)
     private val currentEditors = HashMap<PsiFile, Editor>()
     private val currentFiles = HashMap<Editor, PsiFile>()
     private val cursorHighlights = HashMap<Editor, List<RangeHighlighter>>()
@@ -297,22 +275,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
           .replace("9x9", "\\dx\\d")
       }
       globalMatchLigatures = Regex(escaped.joinToString("|"))
-    }
-
-    private val cachedColors: MutableMap<Color, Array<Color>> = HashMap()
-
-    private fun getMatchingColors(color: Color): Array<Color> {
-      if (!cachedColors.containsKey(color)) {
-        val alpha = color.rgb and 0xFF000000.toInt()
-        val rgb = color.rgb and 0x00FFFFFF
-
-        if (color.blue > 253)
-          cachedColors[color] = arrayOf(Color(alpha or (rgb - 1)), Color(alpha or (rgb - 2)))
-        else
-          cachedColors[color] = arrayOf(Color(alpha or (rgb + 1)), Color(alpha or (rgb + 2)))
-      }
-
-      return cachedColors[color]!!
     }
   }
 }
