@@ -261,15 +261,20 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     if (editor is EditorImpl) {
       val range = elem.textRange
       val highlighters = defaultHighlighters ?: editor.filteredDocumentMarkupModel.allHighlighters
+      var maxLayer = -1
+      var minWidth = Int.MAX_VALUE
 
       for (highlighter in highlighters) {
-        if (highlighter.startOffset >= range.startOffset && highlighter.endOffset <= range.endOffset) {
+        if (highlighter.startOffset <= range.startOffset && range.endOffset <= highlighter.endOffset) {
           val specificColor = highlighter.textAttributes?.foregroundColor
+          val width = highlighter.endOffset - highlighter.startOffset
           val layer = highlighter.layer
 
-          if (specificColor != null && layer != MY_LIGATURE_LAYER && layer != MY_SELECTION_LAYER) {
+          if (specificColor != null && (width < minWidth || (width == minWidth && layer > maxLayer)) &&
+              layer != MY_LIGATURE_LAYER && layer != MY_SELECTION_LAYER) {
             color = specificColor
-            break
+            minWidth = width
+            maxLayer = layer
           }
         }
       }
