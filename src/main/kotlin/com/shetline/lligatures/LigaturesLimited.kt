@@ -222,7 +222,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     globalMatchLigatures.findAll(line).forEach { lig ->
       if (mode == CursorMode.LINE || (mode == CursorMode.CURSOR && pos.column in lig.range.first..lig.range.last + 1)) {
-        val elem = file.findElementAt(lineStart + pos.column)
+        val elem = file.findElementAt(lineStart + pos.column - if (pos.column == lig.range.last + 1) 1 else 0)
 
         if (elem != null) {
           val colors = if (!debug) getHighlightColors(elem, syntaxHighlighter, editor, editor.colorsScheme, defaultForeground)
