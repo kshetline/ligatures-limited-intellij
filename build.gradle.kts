@@ -17,7 +17,7 @@ dependencies {
 }
 
 intellij {
-  version = "IU-2019.3.3"
+  version = "IU-2020.1.2"
   updateSinceUntilBuild = false
 }
 

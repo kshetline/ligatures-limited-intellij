@@ -1,3 +1,4 @@
+@file:Suppress("SpellCheckingInspection")
 package com.shetline.lligatures
 
 import com.intellij.psi.PsiElement
@@ -23,7 +24,7 @@ enum class ElementCategory {
 
 class ElementCategorizer {
   companion object {
-    private val opRegex = Regex("""[!-\/:-@\[-^`{-~]+""")
+    private val opRegex = Regex("""[!-/:-@\[-^`{-~]+""")
 
     fun categoryFor(element: PsiElement, matchText: String, matchIndex: Int, count: Int = 0): ElementCategory {
       // Replace underscores with tildes so they act as regex word boundaries.
@@ -42,7 +43,7 @@ class ElementCategorizer {
         Regex("""\b(tag~start|tag~end|comma|lpar|rpar|lbrace|rbrace|semicolon|""" +
           """lbracket|rbracket)\b""").containsMatchIn(type) ||
           Regex("""['"`]""").matches(matchText) ||
-          element.language.id === "XML" && Regex("""[<\/>]{1,2}""").matches(matchText)
+          element.language.id === "XML" && Regex("""[</>]{1,2}""").matches(matchText)
             -> return ElementCategory.PUNCTUATION
       }
 

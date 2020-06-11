@@ -409,9 +409,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       "www" to "\\bwww\\b"
     )
 
-    @Suppress("RegExpRedundantEscape")
-    private val escapeRegex = Regex("""[-\[\]\/{}()*+?.\\^$|]""")
-    // Comment
+    private val charsNeedingRegexEscape = Regex("""[-\[\]/{}()*+?.\\^$|]""")
+    private val disregarded = arrayOf<String>()
     private val globalMatchLigatures: Regex
     private val DEBUG_GREEN = Color(0x009900)
     private val DEBUG_RED = Color(0xDD0000)
@@ -422,12 +421,68 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     init {
       val sorted = baseLigatures.sortedWith(Comparator { a, b -> b.length - a.length })
-      val escaped = sorted.map { lg ->
-        (lg.replace(escapeRegex) { matchResult -> "\\" + matchResult.value })
-          .replace("0xF", "0x[0-9a-fA-F]")
-          .replace("9x9", "\\dx\\d")
-      }
+      val escaped = sorted.map { lig -> patternSubstitutions[lig] ?: generatePattern(lig) }
       globalMatchLigatures = Regex(escaped.joinToString("|"))
+    }
+
+    private fun generatePattern(ligature: String): String {
+      val leadingSet = HashSet<String>()
+      val trailingSet = HashSet<String>()
+      val len = ligature.length
+
+      for (other in disregarded) {
+        if (other.length <= len)
+          break
+
+        var index = 0
+
+        while ({ index = other.indexOf(ligature, index); index }() >= 0) {
+          if (index > 0)
+            leadingSet.add(other[index - 1].toString())
+
+          if (index + len < other.length)
+            trailingSet.add(other[index + len].toString())
+
+          ++index
+        }
+      }
+
+      val leading = createLeadingOrTrailingClass(leadingSet)
+      val trailing = createLeadingOrTrailingClass(trailingSet)
+      var pattern = ""
+
+      if (!leading.isNullOrEmpty()) // Create negative lookbehind, so this ligature isn't matched if preceded by these characters.
+        pattern += "(?<!$leading)"
+
+      pattern += escapeForRegex(ligature)
+
+      if (!trailing.isNullOrEmpty()) // Create negative lookahead, so this ligature isn't matched if followed by these characters.
+        pattern += "(?!$trailing)"
+
+      return pattern
+    }
+
+    private fun createLeadingOrTrailingClass(set: MutableSet<String>): String? {
+      if (set.isEmpty())
+        return ""
+      else if (set.size == 1)
+        return escapeForRegex(set.elementAt(0))
+
+      var klass = "["
+
+      // If present, dash (`-`) must go first, in case it's the start of a [] class pattern
+      if (set.contains("-")) {
+        klass += "-"
+        set.remove("-")
+      }
+
+      set.forEach { c -> klass += escapeForRegex(c) }
+
+      return "$klass]"
+    }
+
+    private fun escapeForRegex(s: String): String {
+      return s.replace(charsNeedingRegexEscape) { m -> "\\" + m.value }
     }
 
     private val cachedColors: MutableMap<Color, Array<Color>> = HashMap()
