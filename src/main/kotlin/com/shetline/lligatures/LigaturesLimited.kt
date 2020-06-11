@@ -55,7 +55,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     return true
   }
 
-  override fun visit(element: PsiElement) {}
+  override fun visit(elem: PsiElement) {}
 
   private fun searchForLigatures(file: PsiFile) {
     val text = file.text
@@ -108,51 +108,51 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     if (editor != null) {
       ApplicationManager.getApplication().invokeLater {
-        val oldHighlights = syntaxHighlights[editor]
+        val oldHighlighters = syntaxHighlighters[editor]
 
-        if (oldHighlights != null) {
-          oldHighlights.forEach { highlight -> editor.markupModel.removeHighlighter(highlight) }
-          syntaxHighlights.remove(editor)
+        if (oldHighlighters != null) {
+          oldHighlighters.forEach { highlighter -> editor.markupModel.removeHighlighter(highlighter) }
+          syntaxHighlighters.remove(editor)
         }
 
         if (newHighlights.size > 0)
-          applyHighlights(editor, syntaxHighlighter, defaultForeground, newHighlights)
+          applyHighlighters(editor, syntaxHighlighter, defaultForeground, newHighlights)
 
         highlightForCaret(editor, editor.caretModel.logicalPosition)
       }
     }
   }
 
-  private fun applyHighlights(editor: Editor, syntaxHighlighter: SyntaxHighlighter,
-      defaultForeground: Color, highlights: ArrayList<LigatureHighlight>) {
-    if (editor !is EditorImpl || highlights.isEmpty())
+  private fun applyHighlighters(editor: Editor, syntaxHighlighter: SyntaxHighlighter,
+                                defaultForeground: Color, highlighters: ArrayList<LigatureHighlight>) {
+    if (editor !is EditorImpl || highlighters.isEmpty())
       return
 
     val markupModel = editor.markupModel
     val newHighlights = ArrayList<RangeHighlighter>()
-    val existingHighlighters = editor.filteredDocumentMarkupModel.allHighlighters
+    val existingHighlighters = getHighlighters(editor)
 
-    for (highlight in highlights) {
-      val foreground = highlight.color ?: getHighlightColors(highlight.elem, syntaxHighlighter, editor, editor.colorsScheme,
-        defaultForeground, existingHighlighters)[highlight.index % 2]
-      val background = if (highlight.color != null) defaultForeground else null
+    for (highlighter in highlighters) {
+      val foreground = highlighter.color ?: getHighlightColors(highlighter.elem, syntaxHighlighter, editor, editor.colorsScheme,
+        defaultForeground, existingHighlighters)[highlighter.index % 2]
+      val background = if (highlighter.color != null) defaultForeground else null
 
       newHighlights.add(markupModel.addRangeHighlighter(
-        highlight.index, highlight.index + highlight.width, MY_LIGATURE_LAYER,
+        highlighter.index, highlighter.index + highlighter.width, MY_LIGATURE_LAYER,
         TextAttributes(foreground, background, null, EffectType.BOXED, 0),
         HighlighterTargetArea.EXACT_RANGE
       ))
     }
 
     if (newHighlights.size > 0)
-      syntaxHighlights[editor] = newHighlights
+      syntaxHighlighters[editor] = newHighlights
   }
 
   private fun shouldSuppressLigature(
-      element: PsiElement, baseLanguage: Language?,
+      elem: PsiElement, baseLanguage: Language?,
       matchText: String, matchIndex: Int
   ): Boolean {
-    val category = ElementCategorizer.categoryFor(element, matchText, matchIndex)
+    val category = ElementCategorizer.categoryFor(elem, matchText, matchIndex)
 
     return category != ElementCategory.OPERATOR && category != ElementCategory.PUNCTUATION &&
         category != ElementCategory.COMMENT_MARKER &&
@@ -187,8 +187,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       currentEditors.remove(currentFiles[event.editor])
 
     currentFiles.remove(event.editor)
-    cursorHighlights.remove(event.editor)
-    syntaxHighlights.remove(event.editor)
+    cursorHighlighters.remove(event.editor)
+    syntaxHighlighters.remove(event.editor)
     event.editor.caretModel.removeCaretListener(this)
   }
 
@@ -202,12 +202,12 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     val doc = editor.document
     val markupModel = editor.markupModel
-    val oldHighlights = cursorHighlights[editor]
+    val oldHighlights = cursorHighlighters[editor]
     val mode = settings.state!!.cursorMode
 
     if (oldHighlights != null) {
-      oldHighlights.forEach { highlight -> markupModel.removeHighlighter(highlight) }
-      cursorHighlights.remove(editor)
+      oldHighlights.forEach { highlighter -> markupModel.removeHighlighter(highlighter) }
+      cursorHighlighters.remove(editor)
     }
 
     val file = currentFiles[editor] ?: return
@@ -240,7 +240,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     }
 
     if (newHighlights.size > 0)
-      cursorHighlights[editor] = newHighlights
+      cursorHighlighters[editor] = newHighlights
   }
 
   @Nullable
@@ -252,35 +252,106 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
   private fun getHighlightColors(elem: PsiElement, syntaxHighlighter: SyntaxHighlighter, editor: Editor?,
       colorsScheme: TextAttributesScheme, defaultForeground: Color,
-      defaultHighlighters: Array<RangeHighlighter>? = null): Array<Color> {
+      defaultHighlighters: List<RangeHighlighter>? = null): Array<Color> {
     val type = elem.elementType ?: elem.node.elementType
     val textAttrKeys = syntaxHighlighter.getTokenHighlights(type)
     val textAttrs = getTextAttributes(colorsScheme, textAttrKeys)
     var color = textAttrs?.foregroundColor ?: defaultForeground
 
-    if (editor is EditorImpl) {
-      val range = elem.textRange
-      val highlighters = defaultHighlighters ?: editor.filteredDocumentMarkupModel.allHighlighters
-      var maxLayer = -1
-      var minWidth = Int.MAX_VALUE
+    val range = elem.textRange
+    val highlighters = defaultHighlighters ?: getHighlighters(editor)
+    var maxLayer = -1
+    var minWidth = Int.MAX_VALUE
+    val startIndex = findFirstIndex(highlighters, range.startOffset)
 
-      for (highlighter in highlighters) {
+    if (startIndex >= 0) {
+      for (i in startIndex..highlighters.size) {
+        val highlighter = highlighters[i]
+
         if (highlighter.startOffset <= range.startOffset && range.endOffset <= highlighter.endOffset) {
-          val specificColor = highlighter.textAttributes?.foregroundColor
+          val specificColor = highlighter.textAttributes!!.foregroundColor
           val width = highlighter.endOffset - highlighter.startOffset
           val layer = highlighter.layer
 
-          if (specificColor != null && (width < minWidth || (width == minWidth && layer > maxLayer)) &&
-              layer != MY_LIGATURE_LAYER && layer != MY_SELECTION_LAYER) {
+          if (width < minWidth || (width == minWidth && layer > maxLayer)) {
             color = specificColor
             minWidth = width
             maxLayer = layer
           }
         }
+        else if (highlighter.startOffset > range.endOffset)
+          break
       }
     }
 
     return getMatchingColors(color)
+  }
+
+  private fun getHighlighters(editor: Editor?): List<RangeHighlighter>
+  {
+    if (editor !is EditorImpl)
+      return listOf()
+
+    val highlighters = editor.filteredDocumentMarkupModel.allHighlighters
+
+    highlighters.sortWith(Comparator { a, b ->
+      when {
+        a.startOffset > b.startOffset -> 1
+        a.startOffset < b.startOffset -> -1
+        else -> {
+          val aWidth = a.endOffset - a.startOffset
+          val bWidth = b.endOffset - b.startOffset
+
+          when {
+            aWidth > bWidth -> -1
+            aWidth < bWidth -> 1
+            else -> 0
+          }
+        }
+      }
+    })
+
+    return highlighters.filter {
+        h -> h.layer != MY_LIGATURE_LAYER && h.layer != MY_SELECTION_LAYER && h.textAttributes?.foregroundColor != null
+    }
+  }
+
+  // Not quite close enough to any pre-defined binary search to avoid handling this as a special case
+  private fun findFirstIndex(highlighters: List<RangeHighlighter>, offset: Int): Int{
+    var low = 0
+    var high = highlighters.size
+    var matched = false
+    var mid = -1
+
+    // This will narrow down *a* highlighter that contains `offset`, but not necessarily the first one
+    while (low <= high) {
+      mid = (low + high) / 2
+      val highlighter = highlighters[mid]
+
+      if (offset in highlighter.startOffset..highlighter.endOffset) {
+        matched = true
+        break
+      }
+      else if (highlighter.endOffset < offset)
+        low = mid + 1
+      else
+        high = mid - 1
+    }
+
+    if (!matched)
+      return -1
+
+    // Make sure we find the first matching highlighter
+    while (mid > 0) {
+      val highlighter = highlighters[mid - 1]
+
+      if (offset in highlighter.startOffset..highlighter.endOffset)
+        --mid
+      else
+        break
+    }
+
+    return mid
   }
 
   private fun getTextAttributes(colorsScheme: TextAttributesScheme, textAttrKeys: Array<TextAttributesKey>) :
@@ -338,6 +409,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       "www" to "\\bwww\\b"
     )
 
+    @Suppress("RegExpRedundantEscape")
     private val escapeRegex = Regex("""[-\[\]\/{}()*+?.\\^$|]""")
     // Comment
     private val globalMatchLigatures: Regex
@@ -345,8 +417,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private val DEBUG_RED = Color(0xDD0000)
     private val currentEditors = HashMap<PsiFile, Editor>()
     private val currentFiles = HashMap<Editor, PsiFile>()
-    private val cursorHighlights = HashMap<Editor, List<RangeHighlighter>>()
-    private val syntaxHighlights = HashMap<Editor, List<RangeHighlighter>>()
+    private val cursorHighlighters = HashMap<Editor, List<RangeHighlighter>>()
+    private val syntaxHighlighters = HashMap<Editor, List<RangeHighlighter>>()
 
     init {
       val sorted = baseLigatures.sortedWith(Comparator { a, b -> b.length - a.length })

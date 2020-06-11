@@ -1,5 +1,3 @@
-@file:Suppress("SpellCheckingInspection")
-
 package com.shetline.lligatures
 
 import com.intellij.psi.PsiElement
