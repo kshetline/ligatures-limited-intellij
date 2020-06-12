@@ -144,8 +144,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       ))
     }
 
-    if (newHighlights.size > 0)
-      syntaxHighlighters[editor] = newHighlights
+    syntaxHighlighters[editor] = newHighlights
   }
 
   private fun shouldSuppressLigature(
@@ -155,8 +154,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val category = ElementCategorizer.categoryFor(elem, matchText, matchIndex)
 
     return category != ElementCategory.OPERATOR && category != ElementCategory.PUNCTUATION &&
-        category != ElementCategory.COMMENT_MARKER &&
-        !(category == ElementCategory.NUMBER && Regex("""0x[0-9a-f]""", RegexOption.IGNORE_CASE).matches(matchText))
+      category != ElementCategory.COMMENT_MARKER &&
+      !(category == ElementCategory.NUMBER && Regex("""0x[0-9a-f]""", RegexOption.IGNORE_CASE).matches(matchText))
   }
 
   override fun clone(): HighlightVisitor = LigaturesLimited()
@@ -312,7 +311,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     })
 
     return highlighters.filter {
-        h -> h.layer != MY_LIGATURE_LAYER && h.layer != MY_SELECTION_LAYER && h.textAttributes?.foregroundColor != null
+      h -> h.layer != MY_LIGATURE_LAYER && h.layer != MY_SELECTION_LAYER && h.textAttributes?.foregroundColor != null
     }
   }
 
@@ -405,8 +404,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       "0xF" to "0x[0-9a-fA-F]",
       "0o7" to "0o[0-7]",
       "0b1" to "0b[01]",
-      "9x9" to "\\dx\\d",
-      "www" to "\\bwww\\b"
+      "9x9" to "\\dx\\d"
     )
 
     private val charsNeedingRegexEscape = Regex("""[-\[\]/{}()*+?.\\^$|]""")
