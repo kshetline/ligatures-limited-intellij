@@ -133,12 +133,14 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val existingHighlighters = getHighlighters(editor)
 
     for (highlighter in highlighters) {
-      val foreground = highlighter.color ?: getHighlightColors(highlighter.elem, syntaxHighlighter, editor, editor.colorsScheme,
-        defaultForeground, existingHighlighters)[highlighter.index % 2]
+      val foreground = highlighter.color ?:
+        getHighlightColors(highlighter.elem, highlighter.index, highlighter.span,
+          syntaxHighlighter, editor, editor.colorsScheme,
+          defaultForeground, existingHighlighters)[highlighter.index % 2]
       val background = if (highlighter.color != null) defaultForeground else null
 
       newHighlights.add(markupModel.addRangeHighlighter(
-        highlighter.index, highlighter.index + highlighter.width, MY_LIGATURE_LAYER,
+        highlighter.index, highlighter.index + highlighter.span, MY_LIGATURE_LAYER,
         TextAttributes(foreground, background, null, EffectType.BOXED, 0),
         HighlighterTargetArea.EXACT_RANGE
       ))
@@ -224,10 +226,11 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         val elem = file.findElementAt(lineStart + pos.column - if (pos.column == lig.range.last + 1) 1 else 0)
 
         if (elem != null) {
-          val colors = if (!debug) getHighlightColors(elem, syntaxHighlighter, editor, editor.colorsScheme, defaultForeground)
-            else getMatchingColors(DEBUG_RED)
-
           for (i in lig.range) {
+            val colors = if (!debug) getHighlightColors(elem, lineStart + i, 1,
+                syntaxHighlighter, editor, editor.colorsScheme, defaultForeground)
+              else getMatchingColors(DEBUG_RED)
+
             newHighlights.add(markupModel.addRangeHighlighter(
               lineStart + i, lineStart + i + 1, MY_SELECTION_LAYER,
               TextAttributes(colors[(lineStart + i) % 2], background, null, EffectType.BOXED, 0),
@@ -249,36 +252,37 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     copyBean(state, this)
   }
 
-  private fun getHighlightColors(elem: PsiElement, syntaxHighlighter: SyntaxHighlighter, editor: Editor?,
+  private fun getHighlightColors(elem: PsiElement, textOffset: Int, span: Int,
+      syntaxHighlighter: SyntaxHighlighter, editor: Editor?,
       colorsScheme: TextAttributesScheme, defaultForeground: Color,
       defaultHighlighters: List<RangeHighlighter>? = null): Array<Color> {
     val type = elem.elementType ?: elem.node.elementType
     val textAttrKeys = syntaxHighlighter.getTokenHighlights(type)
     val textAttrs = getTextAttributes(colorsScheme, textAttrKeys)
     var color = textAttrs?.foregroundColor ?: defaultForeground
-
-    val range = elem.textRange
+    val startOffset = maxOf(elem.textRange.startOffset, textOffset)
+    val endOffset = minOf(elem.textRange.endOffset, textOffset + span)
     val highlighters = defaultHighlighters ?: getHighlighters(editor)
     var maxLayer = -1
-    var minWidth = Int.MAX_VALUE
-    val startIndex = findFirstIndex(highlighters, range.startOffset)
+    var minSpan = Int.MAX_VALUE
+    val startIndex = findFirstIndex(highlighters, startOffset)
 
     if (startIndex >= 0) {
       for (i in startIndex..highlighters.size) {
         val highlighter = highlighters[i]
 
-        if (highlighter.startOffset <= range.startOffset && range.endOffset <= highlighter.endOffset) {
+        if (highlighter.startOffset <= startOffset && endOffset <= highlighter.endOffset) {
           val specificColor = highlighter.textAttributes!!.foregroundColor
-          val width = highlighter.endOffset - highlighter.startOffset
+          val highlightSpan = highlighter.endOffset - highlighter.startOffset
           val layer = highlighter.layer
 
-          if (width < minWidth || (width == minWidth && layer > maxLayer)) {
+          if (highlightSpan < minSpan || (highlightSpan == minSpan && layer > maxLayer)) {
             color = specificColor
-            minWidth = width
+            minSpan = highlightSpan
             maxLayer = layer
           }
         }
-        else if (highlighter.startOffset > range.endOffset)
+        else if (highlighter.startOffset > endOffset)
           break
       }
     }
@@ -294,20 +298,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val highlighters = editor.filteredDocumentMarkupModel.allHighlighters
 
     highlighters.sortWith(Comparator { a, b ->
-      when {
-        a.startOffset > b.startOffset -> 1
-        a.startOffset < b.startOffset -> -1
-        else -> {
-          val aWidth = a.endOffset - a.startOffset
-          val bWidth = b.endOffset - b.startOffset
-
-          when {
-            aWidth > bWidth -> -1
-            aWidth < bWidth -> 1
-            else -> 0
-          }
-        }
-      }
+      if (a.startOffset != b.startOffset) a.startOffset - b.startOffset else b.endOffset - a.endOffset
     })
 
     return highlighters.filter {
@@ -373,7 +364,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     var color: Color?,
     var elem: PsiElement,
     var index: Int,
-    var width: Int
+    var span: Int
   )
 
   companion object {
@@ -381,16 +372,18 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private const val MY_SELECTION_LAYER = MY_LIGATURE_LAYER + 1
     private val baseLigatures = ("""
 
-  .= .- := =:= == != === !== =/= <-< <<- <-- <- <-> -> --> ->> >-> <=< <<= <== <=> => ==>
+  .= ..= .- := =:= == != === !== =/= <-< <<- <-- <- <-> -> --> ->> >-> <=< <<= <== <=> => ==> =!= =:=
   =>> >=> >>= >>- >- <~> -< -<< =<< <~~ <~ ~~ ~> ~~> <<< << <= <> >= >> >>> {. {| [| <: :> |] |} .}
   <||| <|| <| <|> |> ||> |||> <$ <$> $> <+ <+> +> <* <*> *> \\ \\\ \* /* */ /// // <// <!-- </> --> />
-  ;; :: ::: .. ... ..< !! ?? %% && || ?. ?: ++ +++ -- --- ** *** ~= ~- www ff fi fl ffi ffl
-  -~ ~@ ^= ?= /= /== |= ||= #! ## ### #### #{ #[ ]# #( #? #_ #_( 9x9 0xF 0o7 0b1
-  <==== ==== ====> <====> <--- ---> <---> <~~~ ~~~> <~~~>
+  ;; :: ::: .. ... ..< !! ?? %% && <:< || ?. ?: ++ +++ -- --- ** *** ~= ~- www ff fi fl ffi ffl
+  -~ ~@ ^= ?= /= /== |= ||= #! ## ### #### #{ #[ ]# #( #? #_ #: #= #_( #{} =~ !~ 9x9 0xF 0o7 0b1
+  |- |-- -| --| |== =| ==| /==/ ==/ /=/ <~~> =>= =<= :>: :<: /\ \/ _|_ ||- :< >: ::=
+  <==== ==== ====> <====> <--- ---> <---> |--- ---| |=== ===| /=== ===/ <~~~ ~~~> <~~~>
 
 """).trim().split(Regex("""\s+"""))
 
     private val patternSubstitutions = hashMapOf<String, String?>(
+      "####" to "#{4,}",
       "<====" to "<={4,}",
       "====" to "={4,}",
       "====>" to "={4,}>",
@@ -398,6 +391,12 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       "<---" to "<-{3,}",
       "--->" to "-{3,}>",
       "<--->" to "<-{3,}>",
+      "|---" to "\\|-{3,}",
+      "---|" to "-{3,}\\|",
+      "|===" to "\\|={3,}",
+      "===|" to "={3,}\\|",
+      "/===" to "\\/={3,}",
+      "===/" to "={3,}\\/",
       "<~~~" to "<~{3,}",
       "~~~>" to "~{3,}>",
       "<~~~>" to "<~{3,}>",
@@ -444,6 +443,26 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
           ++index
         }
       }
+
+      // Handle ligatures which are supposed to be connective with other ligatures
+
+      if (ligature.startsWith("-") && Regex("""[-<>|]+""").matches(ligature))
+        leadingSet.remove("-")
+
+      if (ligature.startsWith("=") && Regex("""[=<>|]+""").matches(ligature))
+        leadingSet.remove("=")
+
+      if (ligature.startsWith("~") && Regex("""[~<>|]+""").matches(ligature))
+        leadingSet.remove("~")
+
+      if (ligature.endsWith("-") && Regex("""[-<>|]+""").matches(ligature))
+        trailingSet.remove("-")
+
+      if (ligature.endsWith("=") && Regex("""[=<>|]+""").matches(ligature))
+        trailingSet.remove("=")
+
+      if (ligature.endsWith("~") && Regex("""[~<>|]+""").matches(ligature))
+        trailingSet.remove("~")
 
       val leading = createLeadingOrTrailingClass(leadingSet)
       val trailing = createLeadingOrTrailingClass(trailingSet)
