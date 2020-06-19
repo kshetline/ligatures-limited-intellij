@@ -470,10 +470,10 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
       // Give triangles (◁, ▷) and diamonds (♢) formed using < and > higher priority.
       if (Regex("""^[>|]""").containsMatchIn(ligature))
-        leadingSet.add("<");
+        leadingSet.add("<")
 
       if (Regex("""[|<]$""").containsMatchIn(ligature))
-        trailingSet.add(">");
+        trailingSet.add(">")
 
       for (other in disregarded) {
         if (other.length <= len)
@@ -494,10 +494,10 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
       // Handle ligatures which are supposed to blend with combinatory arrow ligatures
       connectionTweaks.forEach { (key, pattern) ->
-        if (ligature.startsWith(key) && connectionTweaks[key]!!.matches(ligature))
+        if (ligature.startsWith(key) && pattern!!.matches(ligature))
           leadingSet.add(key)
 
-        if (ligature.endsWith(key) && connectionTweaks[key]!!.matches(ligature))
+        if (ligature.endsWith(key) && pattern!!.matches(ligature))
           trailingSet.add(key)
       }
 
