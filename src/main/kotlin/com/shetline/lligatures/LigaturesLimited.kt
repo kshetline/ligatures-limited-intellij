@@ -81,6 +81,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val syntaxHighlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(file.language, file.project, file.virtualFile)
     val defaultForeground = EditorColorsManager.getInstance().globalScheme.defaultForeground
     val newHighlights = ArrayList<LigatureHighlight>()
+    var lastDebugHighlight: LigatureHighlight? = null
+    var lastDebugCategory: ElementCategory? = null
 
     while ({ match = globalMatchLigatures.find(text, index); match }() != null && index < text.length) {
       val matchIndex = match!!.range.first
@@ -97,13 +99,43 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
             newHighlights.add(LigatureHighlight(foreground, elem, matchIndex + i, 1))
           }
+
+          lastDebugHighlight = null
         }
-        else if (debug)
-          newHighlights.add(LigatureHighlight(DEBUG_GREEN, elem, matchIndex, matchText.length))
+        else if (debug) {
+          val debugCategory = ElementCategorizer.categoryFor(elem, matchText, matchIndex)
+
+          if (lastDebugHighlight != null && lastDebugHighlight.index + lastDebugHighlight.span == matchIndex &&
+              lastDebugCategory == debugCategory )
+            lastDebugHighlight.span += matchText.length
+          else {
+            lastDebugHighlight = LigatureHighlight(DEBUG_GREEN, elem, matchIndex, matchText.length)
+            lastDebugCategory = debugCategory
+            newHighlights.add(lastDebugHighlight)
+          }
+        }
       }
 
       index = (matchIndex + matchText.length).coerceAtLeast(index + 1)
       ProgressManager.checkCanceled()
+    }
+
+    val hIndex = if (lastDebugHighlight != null) lastDebugHighlight.index + lastDebugHighlight.span else -1
+
+    if (hIndex > 0 && hIndex < text.length - 1) {
+      val extensionCandidate = text.substring(hIndex - 1, hIndex + 1)
+      match = globalMatchLigatures.find(text, index)
+
+      if (match != null) {
+        val elem = file.findElementAt(hIndex)
+
+        if (elem != null) {
+          val debugCategory = ElementCategorizer.categoryFor(elem, extensionCandidate, (hIndex - 1))
+
+          if (debugCategory == lastDebugCategory)
+            ++lastDebugHighlight!!.span
+        }
+      }
     }
 
     if (editor != null) {
@@ -139,11 +171,16 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
           defaultForeground, existingHighlighters)[highlighter.index % 2]
       val background = if (highlighter.color != null) defaultForeground else null
 
-      newHighlights.add(markupModel.addRangeHighlighter(
-        highlighter.index, highlighter.index + highlighter.span, MY_LIGATURE_LAYER,
-        TextAttributes(foreground, background, null, EffectType.BOXED, 0),
-        HighlighterTargetArea.EXACT_RANGE
-      ))
+      try {
+        newHighlights.add(markupModel.addRangeHighlighter(
+          highlighter.index, highlighter.index + highlighter.span, MY_LIGATURE_LAYER,
+          TextAttributes(foreground, background, null, EffectType.BOXED, 0),
+          HighlighterTargetArea.EXACT_RANGE
+        ))
+      }
+      catch (e: Exception) {
+        println(e.message)
+      }
     }
 
     syntaxHighlighters[editor] = newHighlights
@@ -301,9 +338,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       if (a.startOffset != b.startOffset) a.startOffset - b.startOffset else b.endOffset - a.endOffset
     })
 
-    return highlighters.filter {
-      h -> h.layer != MY_LIGATURE_LAYER && h.layer != MY_SELECTION_LAYER && h.textAttributes?.foregroundColor != null
-    }
+    return highlighters.filter { h -> h.layer < MY_LIGATURE_LAYER && h.textAttributes?.foregroundColor != null }
   }
 
   // Not quite close enough to any pre-defined binary search to avoid handling this as a special case
@@ -368,7 +403,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   )
 
   companion object {
-    private const val MY_LIGATURE_LAYER = HighlighterLayer.SELECTION + 77
+    private const val MY_LIGATURE_LAYER = HighlighterLayer.SELECTION - 33
     private const val MY_SELECTION_LAYER = MY_LIGATURE_LAYER + 1
     private val baseLigatures = ("""
 
@@ -406,6 +441,12 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       "9x9" to "\\dx\\d"
     )
 
+    private val connectionTweaks = hashMapOf<String, Regex?>(
+      "-" to Regex("""[-<>|]+"""),
+      "=" to Regex("""[=<>|]+"""),
+      "~" to Regex("""[~<>|]+""")
+    )
+
     private val charsNeedingRegexEscape = Regex("""[-\[\]/{}()*+?.\\^$|]""")
     private val disregarded = arrayOf<String>()
     private val globalMatchLigatures: Regex
@@ -427,6 +468,13 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       val trailingSet = HashSet<String>()
       val len = ligature.length
 
+      // Give triangles (◁, ▷) and diamonds (♢) formed using < and > higher priority.
+      if (Regex("""^[>|]""").containsMatchIn(ligature))
+        leadingSet.add("<");
+
+      if (Regex("""[|<]$""").containsMatchIn(ligature))
+        trailingSet.add(">");
+
       for (other in disregarded) {
         if (other.length <= len)
           break
@@ -444,25 +492,16 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         }
       }
 
+      // Handle ligatures which are supposed to blend with combinatory arrow ligatures
+      connectionTweaks.forEach { (key, pattern) ->
+        if (ligature.startsWith(key) && connectionTweaks[key]!!.matches(ligature))
+          leadingSet.add(key)
+
+        if (ligature.endsWith(key) && connectionTweaks[key]!!.matches(ligature))
+          trailingSet.add(key)
+      }
+
       // Handle ligatures which are supposed to be connective with other ligatures
-
-      if (ligature.startsWith("-") && Regex("""[-<>|]+""").matches(ligature))
-        leadingSet.remove("-")
-
-      if (ligature.startsWith("=") && Regex("""[=<>|]+""").matches(ligature))
-        leadingSet.remove("=")
-
-      if (ligature.startsWith("~") && Regex("""[~<>|]+""").matches(ligature))
-        leadingSet.remove("~")
-
-      if (ligature.endsWith("-") && Regex("""[-<>|]+""").matches(ligature))
-        trailingSet.remove("-")
-
-      if (ligature.endsWith("=") && Regex("""[=<>|]+""").matches(ligature))
-        trailingSet.remove("=")
-
-      if (ligature.endsWith("~") && Regex("""[~<>|]+""").matches(ligature))
-        trailingSet.remove("~")
 
       val leading = createLeadingOrTrailingClass(leadingSet)
       val trailing = createLeadingOrTrailingClass(trailingSet)

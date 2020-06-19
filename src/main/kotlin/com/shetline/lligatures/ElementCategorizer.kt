@@ -6,6 +6,7 @@ import com.intellij.psi.PsiElement
 enum class ElementCategory {
   ATTRIBUTE_NAME,
   ATTRIBUTE_VALUE,
+  BLOCK_COMMENT,
   COMMENT,
   COMMENT_MARKER,
   CONSTANT,
@@ -32,7 +33,7 @@ class ElementCategorizer {
       var isWhitespace = false
 
       when {
-        Regex("""\bstring\b""").containsMatchIn(type) -> return ElementCategory.STRING
+        Regex("""\b(string|escape~sequence)\b""").containsMatchIn(type) -> return ElementCategory.STRING
         Regex("""\bregexp\b""").containsMatchIn(type) -> return ElementCategory.REGEXP
         Regex("""\bkeyword\b""").containsMatchIn(type) -> return ElementCategory.KEYWORD
         Regex("""\b(identifier|css~class|css~ident)\b""").containsMatchIn(type) -> return ElementCategory.IDENTIFIER
@@ -50,13 +51,15 @@ class ElementCategorizer {
       val text = element.text
       val elementIndex = element.textOffset
       val operatorLike = matchText.length < 8 && opRegex.matches(matchText)
-      val commentLike = Regex("""\bcomment\b""").containsMatchIn(type)
+      val commentLike = Regex("""\b(comment|shebang)\b""").containsMatchIn(type)
+      val blockComment = commentLike && Regex("""\b(block~comment|c~style~comment)\b""").containsMatchIn(type)
 
       if (!isWhitespace && operatorLike && commentLike) {
         return if (elementIndex == matchIndex ||
-                   (elementIndex + text.length - matchText.length == matchIndex &&
-                    Regex("""\b(block~comment|c~style~comment)\b""").containsMatchIn(type)))
+                   (elementIndex + text.length - matchText.length == matchIndex && blockComment))
           ElementCategory.COMMENT_MARKER
+        else if (blockComment || text.startsWith("/*"))
+          ElementCategory.BLOCK_COMMENT
         else
           ElementCategory.COMMENT
       }
