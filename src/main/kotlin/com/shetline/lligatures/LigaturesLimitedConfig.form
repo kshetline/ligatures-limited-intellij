@@ -9,7 +9,7 @@
       <color color="-4473925"/>
     </border>
     <children>
-      <grid id="27dc6" binding="panel" layout-manager="GridLayoutManager" row-count="3" column-count="2" same-size-horizontally="false" same-size-vertically="false" hgap="-1" vgap="4">
+      <grid id="27dc6" binding="panel" layout-manager="GridLayoutManager" row-count="5" column-count="2" same-size-horizontally="false" same-size-vertically="false" hgap="-1" vgap="4">
         <margin top="8" left="8" bottom="8" right="8"/>
         <constraints border-constraint="North"/>
         <properties/>
@@ -67,8 +67,27 @@
               <text value="Debug"/>
             </properties>
           </component>
+          <component id="d37b7" class="javax.swing.JCheckBox" binding="advancedSettings">
+            <constraints>
+              <grid row="4" column="0" row-span="1" col-span="1" vsize-policy="0" hsize-policy="3" anchor="8" fill="0" indent="0" use-parent-layout="false"/>
+            </constraints>
+            <properties>
+              <text value="Advanced settings:"/>
+            </properties>
+          </component>
+          <vspacer id="b355b">
+            <constraints>
+              <grid row="3" column="0" row-span="1" col-span="1" vsize-policy="6" hsize-policy="1" anchor="0" fill="2" indent="0" use-parent-layout="false">
+                <preferred-size width="-1" height="4"/>
+              </grid>
+            </constraints>
+          </vspacer>
         </children>
       </grid>
+      <component id="ad4a8" class="com.intellij.ui.LanguageTextField" binding="json" custom-create="true">
+        <constraints border-constraint="Center"/>
+        <properties/>
+      </component>
     </children>
   </grid>
 </form>
