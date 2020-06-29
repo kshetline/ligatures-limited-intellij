@@ -84,7 +84,7 @@
           </vspacer>
         </children>
       </grid>
-      <component id="ad4a8" class="com.intellij.ui.LanguageTextField" binding="json" custom-create="true">
+      <component id="ad4a8" class="com.intellij.ui.LanguageTextField" binding="json">
         <constraints border-constraint="Center"/>
         <properties/>
       </component>

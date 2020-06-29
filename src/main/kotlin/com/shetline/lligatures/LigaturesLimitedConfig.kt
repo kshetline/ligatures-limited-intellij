@@ -7,6 +7,7 @@ import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.ui.LanguageTextField
+import java.awt.BorderLayout
 import java.awt.Font
 import javax.swing.*
 
@@ -42,27 +43,24 @@ class LigaturesLimitedConfig : Configurable, Disposable {
   }
 
   override fun createComponent(): JComponent? {
-    return wrapper
-  }
-
-  private fun createUIComponents() {
     val projectManager: ProjectManager = ProjectManager.getInstance()
     val projects = projectManager.openProjects
     val scheme = EditorColorsManager.getInstance().globalScheme
     val project = if (projects.isNotEmpty()) projects[0] else projectManager.defaultProject
+    val parent = json.parent
 
-    SwingUtilities.invokeAndWait {
-      json = LanguageTextField(Json5Language.INSTANCE, project, configState?.json ?: "")
-      json.font = Font(scheme.editorFontName, Font.PLAIN, scheme.editorFontSize)
-      json.setOneLineMode(false)
-    }
+    parent.remove(json)
+    json = LanguageTextField(Json5Language.INSTANCE, project, configState?.json ?: "")
+    json.font = Font(scheme.editorFontName, Font.PLAIN, scheme.editorFontSize)
+    json.setOneLineMode(false)
+    parent.add(BorderLayout.CENTER, json)
+
+    return wrapper
   }
 
   override fun reset() {
     debug.isSelected = configState?.debug ?: false
-
-    if (json != null)
-      json.text = configState?.json ?: ""
+    json.text = configState?.json ?: ""
   }
 
   override fun dispose() {
