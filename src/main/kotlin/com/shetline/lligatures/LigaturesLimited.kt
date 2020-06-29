@@ -90,27 +90,27 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       val elem = file.findElementAt(matchIndex)
 
       if (elem != null && elem.language == file.language) {
-        if (shouldSuppressLigature(elem, file.language, matchText, matchIndex)) {
+        val category = ElementCategorizer.categoryFor(elem, matchText, matchIndex)
+
+        if (shouldSuppressLigature(elem, category, file.language, matchText, matchIndex)) {
           val colors = getMatchingColors(DEBUG_RED)
 
           for (i in matchText.indices) {
             val phase = (matchIndex + i) % 2
             val foreground = if (debug) colors[phase] else null
 
-            newHighlights.add(LigatureHighlight(foreground, elem, matchText, matchIndex + i, 1))
+            newHighlights.add(LigatureHighlight(foreground, elem, category, matchText, matchIndex + i, 1))
           }
 
           lastDebugHighlight = null
         }
         else if (debug) {
-          val debugCategory = ElementCategorizer.categoryFor(elem, matchText, matchIndex)
-
           if (lastDebugHighlight != null && lastDebugHighlight.index + lastDebugHighlight.span == matchIndex &&
-              lastDebugCategory == debugCategory )
+              lastDebugCategory == category )
             lastDebugHighlight.span += matchText.length
           else {
-            lastDebugHighlight = LigatureHighlight(DEBUG_GREEN, elem, matchText, matchIndex, matchText.length)
-            lastDebugCategory = debugCategory
+            lastDebugHighlight = LigatureHighlight(DEBUG_GREEN, elem, category, matchText, matchIndex, matchText.length)
+            lastDebugCategory = category
             newHighlights.add(lastDebugHighlight)
           }
         }
@@ -166,7 +166,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     for (highlighter in highlighters) {
       val foreground = highlighter.color ?:
-        getHighlightColors(highlighter.elem, highlighter.ligature, highlighter.index, highlighter.span,
+        getHighlightColors(highlighter.elem, highlighter.category, highlighter.ligature, highlighter.index, highlighter.span,
           syntaxHighlighter, editor, editor.colorsScheme,
           defaultForeground, existingHighlighters)[highlighter.index % 2]
       val background = if (highlighter.color != null) defaultForeground else null
@@ -196,10 +196,10 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   }
 
   private fun shouldSuppressLigature(
-      elem: PsiElement, baseLanguage: Language?,
+      elem: PsiElement, inCategory: ElementCategory?, baseLanguage: Language?,
       matchText: String, matchIndex: Int
   ): Boolean {
-    val category = ElementCategorizer.categoryFor(elem, matchText, matchIndex)
+    val category = inCategory ?: ElementCategorizer.categoryFor(elem, matchText, matchIndex)
 
     return category != ElementCategory.OPERATOR && category != ElementCategory.PUNCTUATION &&
       category != ElementCategory.COMMENT_MARKER &&
@@ -272,8 +272,10 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         val elem = file.findElementAt(lineStart + pos.column - if (pos.column == lig.range.last + 1) 1 else 0)
 
         if (elem != null) {
+          val category = ElementCategorizer.categoryFor(elem, lig.value, lineStart + lig.range.first)
+
           for (i in lig.range) {
-            val colors = if (!debug) getHighlightColors(elem, lig.value, lineStart + i, 1,
+            val colors = if (!debug) getHighlightColors(elem, category, lig.value, lineStart + i, 1,
                 syntaxHighlighter, editor, editor.colorsScheme, defaultForeground)
               else getMatchingColors(DEBUG_RED)
 
@@ -298,7 +300,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     copyBean(state, this)
   }
 
-  private fun getHighlightColors(elem: PsiElement, ligature: String, textOffset: Int, span: Int,
+  private fun getHighlightColors(elem: PsiElement, category: ElementCategory,
+      ligature: String, textOffset: Int, span: Int,
       syntaxHighlighter: SyntaxHighlighter, editor: Editor?,
       colorsScheme: TextAttributesScheme, defaultForeground: Color,
       defaultHighlighters: List<RangeHighlighter>? = null): Array<Color?> {
@@ -330,7 +333,10 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       }
     }
 
-    if (color == null && ElementCategorizer.opRegex.matches(ligature)) {
+    if (color == null &&
+        (category == ElementCategory.STRING || category == ElementCategory.TEXT ||
+         category == ElementCategory.COMMENT || category == ElementCategory.BLOCK_COMMENT ||
+         ElementCategorizer.opRegex.matches(ligature))) {
       val type = elem.elementType ?: elem.node.elementType
       val textAttrKeys = syntaxHighlighter.getTokenHighlights(type)
       val textAttrs = getTextAttributes(colorsScheme, textAttrKeys)
@@ -415,6 +421,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   data class LigatureHighlight (
     var color: Color?,
     var elem: PsiElement,
+    var category: ElementCategory,
     var ligature: String,
     var index: Int,
     var span: Int
