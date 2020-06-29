@@ -97,7 +97,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
             val phase = (matchIndex + i) % 2
             val foreground = if (debug) colors[phase] else null
 
-            newHighlights.add(LigatureHighlight(foreground, elem, matchIndex + i, 1))
+            newHighlights.add(LigatureHighlight(foreground, elem, matchText, matchIndex + i, 1))
           }
 
           lastDebugHighlight = null
@@ -109,7 +109,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
               lastDebugCategory == debugCategory )
             lastDebugHighlight.span += matchText.length
           else {
-            lastDebugHighlight = LigatureHighlight(DEBUG_GREEN, elem, matchIndex, matchText.length)
+            lastDebugHighlight = LigatureHighlight(DEBUG_GREEN, elem, matchText, matchIndex, matchText.length)
             lastDebugCategory = debugCategory
             newHighlights.add(lastDebugHighlight)
           }
@@ -166,7 +166,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     for (highlighter in highlighters) {
       val foreground = highlighter.color ?:
-        getHighlightColors(highlighter.elem, highlighter.index, highlighter.span,
+        getHighlightColors(highlighter.elem, highlighter.ligature, highlighter.index, highlighter.span,
           syntaxHighlighter, editor, editor.colorsScheme,
           defaultForeground, existingHighlighters)[highlighter.index % 2]
       val background = if (highlighter.color != null) defaultForeground else null
@@ -174,9 +174,18 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       try {
         newHighlights.add(markupModel.addRangeHighlighter(
           highlighter.index, highlighter.index + highlighter.span, MY_LIGATURE_LAYER,
-          TextAttributes(foreground, background, null, EffectType.BOXED, 0),
+          TextAttributes(foreground, null, null, EffectType.BOXED, 0),
           HighlighterTargetArea.EXACT_RANGE
         ))
+
+        if (background != null) {
+          // Apply background at lower layer so selection layer can override it
+          newHighlights.add(markupModel.addRangeHighlighter(
+            highlighter.index, highlighter.index + highlighter.span, MY_LIGATURE_BACKGROUND_LAYER,
+            TextAttributes(null, background, null, EffectType.BOXED, 0),
+            HighlighterTargetArea.EXACT_RANGE
+          ))
+        }
       }
       catch (e: Exception) {
         println(e.message)
@@ -264,7 +273,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
         if (elem != null) {
           for (i in lig.range) {
-            val colors = if (!debug) getHighlightColors(elem, lineStart + i, 1,
+            val colors = if (!debug) getHighlightColors(elem, lig.value, lineStart + i, 1,
                 syntaxHighlighter, editor, editor.colorsScheme, defaultForeground)
               else getMatchingColors(DEBUG_RED)
 
@@ -289,14 +298,11 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     copyBean(state, this)
   }
 
-  private fun getHighlightColors(elem: PsiElement, textOffset: Int, span: Int,
+  private fun getHighlightColors(elem: PsiElement, ligature: String, textOffset: Int, span: Int,
       syntaxHighlighter: SyntaxHighlighter, editor: Editor?,
       colorsScheme: TextAttributesScheme, defaultForeground: Color,
-      defaultHighlighters: List<RangeHighlighter>? = null): Array<Color> {
-    val type = elem.elementType ?: elem.node.elementType
-    val textAttrKeys = syntaxHighlighter.getTokenHighlights(type)
-    val textAttrs = getTextAttributes(colorsScheme, textAttrKeys)
-    var color = textAttrs?.foregroundColor ?: defaultForeground
+      defaultHighlighters: List<RangeHighlighter>? = null): Array<Color?> {
+    var color: Color? = null
     val startOffset = maxOf(elem.textRange.startOffset, textOffset)
     val endOffset = minOf(elem.textRange.endOffset, textOffset + span)
     val highlighters = defaultHighlighters ?: getHighlighters(editor)
@@ -313,7 +319,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
           val highlightSpan = highlighter.endOffset - highlighter.startOffset
           val layer = highlighter.layer
 
-          if (highlightSpan < minSpan || (highlightSpan == minSpan && layer > maxLayer)) {
+          if (layer > maxLayer || (layer == maxLayer && highlightSpan < minSpan)) {
             color = specificColor
             minSpan = highlightSpan
             maxLayer = layer
@@ -322,6 +328,14 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         else if (highlighter.startOffset > endOffset)
           break
       }
+    }
+
+    if (color == null && ElementCategorizer.opRegex.matches(ligature)) {
+      val type = elem.elementType ?: elem.node.elementType
+      val textAttrKeys = syntaxHighlighter.getTokenHighlights(type)
+      val textAttrs = getTextAttributes(colorsScheme, textAttrKeys)
+
+      color = textAttrs?.foregroundColor ?: defaultForeground
     }
 
     return getMatchingColors(color)
@@ -342,7 +356,10 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   }
 
   // Not quite close enough to any pre-defined binary search to avoid handling this as a special case
-  private fun findFirstIndex(highlighters: List<RangeHighlighter>, offset: Int): Int{
+  private fun findFirstIndex(highlighters: List<RangeHighlighter>, offset: Int): Int {
+    if (highlighters.isEmpty())
+      return -1
+
     var low = 0
     var high = highlighters.size
     var matched = false
@@ -398,18 +415,20 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   data class LigatureHighlight (
     var color: Color?,
     var elem: PsiElement,
+    var ligature: String,
     var index: Int,
     var span: Int
   )
 
   companion object {
-    private const val MY_LIGATURE_LAYER = HighlighterLayer.SELECTION - 33
+    private const val MY_LIGATURE_LAYER = HighlighterLayer.SELECTION + 33
+    private const val MY_LIGATURE_BACKGROUND_LAYER = HighlighterLayer.SELECTION - 33
     private const val MY_SELECTION_LAYER = MY_LIGATURE_LAYER + 1
     private val baseLigatures = ("""
 
   .= ..= .- := =:= == != === !== =/= <-< <<- <-- <- <-> -> --> ->> >-> <=< <<= <== <=> => ==> =!= =:=
   =>> >=> >>= >>- >- <~> -< -<< =<< <~~ <~ ~~ ~> ~~> <<< << <= <> >= >> >>> {. {| [| <: :> |] |} .}
-  <||| <|| <| <|> |> ||> |||> <$ <$> $> <+ <+> +> <* <*> *> \\ \\\ \* /* */ /// // <// <!-- </> --> />
+  <||| <|| <| <|> |> ||> |||> <$ <$> $> <+ <+> +> <* <*> *> \\ \\\ \* /* */ /// // </ <!-- </> --> />
   ;; :: ::: .. ... ..< !! ?? %% && <:< || ?. ?: ++ +++ -- --- ** *** ~= ~- www ff fi fl ffi ffl
   -~ ~@ ^= ?= /= /== |= ||= #! ## ### #### #{ #[ ]# #( #? #_ #: #= #_( #{} =~ !~ 9x9 0xF 0o7 0b1
   |- |-- -| --| |== =| ==| /==/ ==/ /=/ <~~> =>= =<= :>: :<: /\ \/ _|_ ||- :< >: ::=
@@ -541,17 +560,20 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       return s.replace(charsNeedingRegexEscape) { m -> "\\" + m.value }
     }
 
-    private val cachedColors: MutableMap<Color, Array<Color>> = HashMap()
+    private val cachedColors: MutableMap<Color, Array<Color?>> = HashMap()
+    private val noColors = arrayOf<Color?>(null, null)
 
-    private fun getMatchingColors(color: Color): Array<Color> {
-      if (!cachedColors.containsKey(color)) {
+    private fun getMatchingColors(color: Color?): Array<Color?> {
+      if (color == null)
+        return noColors
+      else if (!cachedColors.containsKey(color)) {
         val alpha = color.rgb and 0xFF000000.toInt()
         val rgb = color.rgb and 0x00FFFFFF
 
         if (color.blue > 253)
-          cachedColors[color] = arrayOf(Color(alpha or (rgb - 1)), Color(alpha or (rgb - 2)))
+          cachedColors[color] = arrayOf<Color?>(Color(alpha or (rgb - 1)), Color(alpha or (rgb - 2)))
         else
-          cachedColors[color] = arrayOf(Color(alpha or (rgb + 1)), Color(alpha or (rgb + 2)))
+          cachedColors[color] = arrayOf<Color?>(Color(alpha or (rgb + 1)), Color(alpha or (rgb + 2)))
       }
 
       return cachedColors[color]!!

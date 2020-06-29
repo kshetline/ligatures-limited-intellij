@@ -25,6 +25,7 @@ open class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedS
   class SettingsState {
     var debug = false
     var cursorMode = CursorMode.CURSOR
+    var json = ""
   }
 
   companion object {

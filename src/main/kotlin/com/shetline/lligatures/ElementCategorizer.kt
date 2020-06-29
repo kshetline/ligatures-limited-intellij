@@ -25,7 +25,7 @@ enum class ElementCategory {
 
 class ElementCategorizer {
   companion object {
-    private val opRegex = Regex("""[!-/:-@\[-^`{-~]+""")
+    val opRegex = Regex("""[!-/:-@\[-^`{-~]+""")
 
     fun categoryFor(element: PsiElement, matchText: String, matchIndex: Int, count: Int = 0): ElementCategory {
       // Replace underscores with tildes so they act as regex word boundaries.
