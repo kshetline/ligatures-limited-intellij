@@ -257,6 +257,9 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       cursorHighlighters.remove(editor)
     }
 
+    if (settings.state!!.cursorMode == CursorMode.OFF)
+      return
+
     val file = currentFiles[editor] ?: return
     val lineStart = doc.getLineStartOffset(pos.line)
     val lineEnd = if (pos.line < doc.lineCount - 1) doc.getLineStartOffset(pos.line + 1) else doc.textLength
@@ -335,7 +338,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     if (color == null &&
         (category == ElementCategory.STRING || category == ElementCategory.TEXT ||
-         category == ElementCategory.COMMENT || category == ElementCategory.BLOCK_COMMENT ||
+         category == ElementCategory.LINE_COMMENT || category == ElementCategory.BLOCK_COMMENT ||
          ElementCategorizer.opRegex.matches(ligature))) {
       val type = elem.elementType ?: elem.node.elementType
       val textAttrKeys = syntaxHighlighter.getTokenHighlights(type)
@@ -463,7 +466,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       "<~~~>" to "<~{3,}>",
       "0xF" to "0x[0-9a-fA-F]",
       "0o7" to "0o[0-7]",
-      "0b1" to "0b[01]",
+      "0b1" to "(?<![0-9a-fA-FxX])0b[01]",
       "9x9" to "\\dx\\d"
     )
 

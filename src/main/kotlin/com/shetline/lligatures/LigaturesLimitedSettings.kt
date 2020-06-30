@@ -23,8 +23,11 @@ open class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedS
   }
 
   class SettingsState {
-    var debug = false
+    var contexts = ""
     var cursorMode = CursorMode.CURSOR
+    var debug = false
+    var disregarded = ""
+    var advanced = false
     var json = ""
   }
 

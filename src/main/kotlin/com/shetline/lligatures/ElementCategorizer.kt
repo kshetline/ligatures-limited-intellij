@@ -7,11 +7,11 @@ enum class ElementCategory {
   ATTRIBUTE_NAME,
   ATTRIBUTE_VALUE,
   BLOCK_COMMENT,
-  COMMENT,
   COMMENT_MARKER,
   CONSTANT,
   IDENTIFIER,
   KEYWORD,
+  LINE_COMMENT,
   NUMBER,
   OPERATOR,
   OTHER,
@@ -61,11 +61,11 @@ class ElementCategorizer {
         else if (blockComment || text.startsWith("/*"))
           ElementCategory.BLOCK_COMMENT
         else
-          ElementCategory.COMMENT
+          ElementCategory.LINE_COMMENT
       }
 
       when {
-        (commentLike) -> return ElementCategory.COMMENT
+        (commentLike) -> return ElementCategory.LINE_COMMENT
         (operatorLike) ->  return ElementCategory.OPERATOR
       }
 
