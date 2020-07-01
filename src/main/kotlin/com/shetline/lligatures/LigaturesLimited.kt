@@ -272,7 +272,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     globalMatchLigatures.findAll(line).forEach { lig ->
       if (mode == CursorMode.LINE || (mode == CursorMode.CURSOR && pos.column in lig.range.first..lig.range.last + 1)) {
-        val elem = file.findElementAt(lineStart + pos.column - if (pos.column == lig.range.last + 1) 1 else 0)
+        val elem = file.findElementAt(lineStart + lig.range.first)
 
         if (elem != null) {
           val category = ElementCategorizer.categoryFor(elem, lig.value, lineStart + lig.range.first)
