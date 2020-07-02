@@ -13,6 +13,8 @@ repositories {
 
 dependencies {
   implementation(kotlin("stdlib-jdk8"))
+  implementation(kotlin("reflect"))
+  implementation(files("lib/klaxon-5.2.jar"))
   testCompile("junit", "junit", "4.12")
 }
 

@@ -84,7 +84,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     var lastDebugHighlight: LigatureHighlight? = null
     var lastDebugCategory: ElementCategory? = null
 
-    while ({ match = globalMatchLigatures.find(text, index); match }() != null && index < text.length) {
+    while (index < text.length && { match = globalMatchLigatures.find(text, index); match }() != null) {
       val matchIndex = match!!.range.first
       val matchText = match!!.groupValues[0]
       val elem = file.findElementAt(matchIndex)
@@ -370,7 +370,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       return -1
 
     var low = 0
-    var high = highlighters.size
+    var high = highlighters.size - 1
     var matched = false
     var mid = -1
 
