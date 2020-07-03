@@ -30,6 +30,7 @@ import com.intellij.util.xmlb.XmlSerializerUtil.copyBean
 import com.shetline.lligatures.LigaturesLimitedSettings.CursorMode
 import org.jetbrains.annotations.Nullable
 import java.awt.Color
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.Comparator
 import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
@@ -59,6 +60,12 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
   private fun searchForLigatures(file: PsiFile) {
     val text = file.text
+    val editor = currentEditors[file]
+
+    if (editor != null) {
+      highlightRechecks[editor]?.interrupt()
+      highlightRechecks.remove(editor)
+    }
 
     @Suppress("ConstantConditionIf")
     if (debugCategories) {
@@ -74,7 +81,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       }
     }
 
-    val editor = currentEditors[file]
     val debug = settings.state!!.debug
     var index = 0
     var match: MatchResult? = null
@@ -99,7 +105,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
             val phase = (matchIndex + i) % 2
             val foreground = if (debug) colors[phase] else null
 
-            newHighlights.add(LigatureHighlight(foreground, elem, category, matchText, matchIndex + i, 1))
+            newHighlights.add(LigatureHighlight(foreground, elem, category, matchText, matchIndex + i, 1, null))
           }
 
           lastDebugHighlight = null
@@ -109,7 +115,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
               lastDebugCategory == category )
             lastDebugHighlight.span += matchText.length
           else {
-            lastDebugHighlight = LigatureHighlight(DEBUG_GREEN, elem, category, matchText, matchIndex, matchText.length)
+            lastDebugHighlight = LigatureHighlight(DEBUG_GREEN, elem, category, matchText, matchIndex,
+              matchText.length, null)
             lastDebugCategory = category
             newHighlights.add(lastDebugHighlight)
           }
@@ -156,7 +163,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   }
 
   private fun applyHighlighters(editor: Editor, syntaxHighlighter: SyntaxHighlighter,
-                                defaultForeground: Color, highlighters: ArrayList<LigatureHighlight>) {
+                                defaultForeground: Color, highlighters: ArrayList<LigatureHighlight>, count: Int = 0) {
     if (editor !is EditorImpl || highlighters.isEmpty())
       return
 
@@ -172,11 +179,21 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       val background = if (highlighter.color != null) defaultForeground else null
 
       try {
-        newHighlights.add(markupModel.addRangeHighlighter(
-          highlighter.index, highlighter.index + highlighter.span, MY_LIGATURE_LAYER,
-          TextAttributes(foreground, null, null, EffectType.BOXED, 0),
-          HighlighterTargetArea.EXACT_RANGE
-        ))
+        val newHighlight = markupModel.addRangeHighlighter(
+            highlighter.index, highlighter.index + highlighter.span, MY_LIGATURE_LAYER,
+            TextAttributes(foreground, null, null, EffectType.BOXED, 0),
+            HighlighterTargetArea.EXACT_RANGE
+          )
+
+        if (highlighter.lastHighlighter != null) {
+          if (foreground != null && foreground == highlighter.lastHighlighter?.textAttributes?.foregroundColor)
+            continue
+
+          markupModel.removeHighlighter(highlighter.lastHighlighter!!)
+        }
+
+        newHighlights.add(newHighlight)
+        highlighter.lastHighlighter = newHighlight
 
         if (background != null) {
           // Apply background at lower layer so selection layer can override it
@@ -193,6 +210,13 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     }
 
     syntaxHighlighters[editor] = newHighlights
+
+    if (count < MAX_HIGHLIGHT_RECHECK_COUNT && !highlightRechecks.contains(editor)) {
+      val recheck = HighlightRecheck(editor, syntaxHighlighter, defaultForeground, highlighters, count + 1)
+
+      highlightRechecks[editor] = recheck
+      recheck.start()
+    }
   }
 
   private fun shouldSuppressLigature(
@@ -230,13 +254,17 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   }
 
   override fun editorReleased(event: EditorFactoryEvent) {
-    if (currentFiles[event.editor] != null)
-      currentEditors.remove(currentFiles[event.editor])
+    val editor = event.editor
 
-    currentFiles.remove(event.editor)
-    cursorHighlighters.remove(event.editor)
-    syntaxHighlighters.remove(event.editor)
-    event.editor.caretModel.removeCaretListener(this)
+    if (currentFiles[editor] != null)
+      currentEditors.remove(currentFiles[editor])
+
+    highlightRechecks[editor]?.interrupt()
+    highlightRechecks.remove(editor)
+    currentFiles.remove(editor)
+    cursorHighlighters.remove(editor)
+    syntaxHighlighters.remove(editor)
+    editor.caretModel.removeCaretListener(this)
   }
 
   override fun caretPositionChanged(event: CaretEvent) {
@@ -421,19 +449,43 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     override fun doApplyInformationToEditor() {}
   }
 
+  inner class HighlightRecheck(private var editor: Editor, private var syntaxHighlighter: SyntaxHighlighter,
+      private var defaultForeground: Color, private var highlighters: ArrayList<LigatureHighlight>,
+      private var count: Int) : Thread() {
+    override fun run() {
+      try {
+        sleep(HIGHLIGHT_RECHECK_DELAY)
+      }
+      catch (e: InterruptedException) {
+        return
+      }
+
+      ApplicationManager.getApplication().invokeLater {
+        if (!highlightRechecks.contains(editor)) {
+          highlightRechecks.remove(editor)
+          applyHighlighters(editor, syntaxHighlighter, defaultForeground, highlighters, count)
+        }
+      }
+    }
+  }
+
   data class LigatureHighlight (
     var color: Color?,
     var elem: PsiElement,
     var category: ElementCategory,
     var ligature: String,
     var index: Int,
-    var span: Int
+    var span: Int,
+    var lastHighlighter: RangeHighlighter?
   )
 
   companion object {
     private const val MY_LIGATURE_LAYER = HighlighterLayer.SELECTION + 33
     private const val MY_LIGATURE_BACKGROUND_LAYER = HighlighterLayer.SELECTION - 33
     private const val MY_SELECTION_LAYER = MY_LIGATURE_LAYER + 1
+
+    private const val HIGHLIGHT_RECHECK_DELAY = 1000L // milliseconds
+    private const val MAX_HIGHLIGHT_RECHECK_COUNT = 10
 
     private fun isMyLayer(layer: Int): Boolean {
       return layer == MY_LIGATURE_LAYER || layer == MY_LIGATURE_BACKGROUND_LAYER || layer == MY_SELECTION_LAYER
@@ -490,6 +542,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private val currentFiles = HashMap<Editor, PsiFile>()
     private val cursorHighlighters = HashMap<Editor, List<RangeHighlighter>>()
     private val syntaxHighlighters = HashMap<Editor, List<RangeHighlighter>>()
+    private val highlightRechecks = ConcurrentHashMap<Editor, HighlightRecheck>()
 
     init {
       val sorted = baseLigatures.sortedWith(Comparator { a, b -> b.length - a.length })
