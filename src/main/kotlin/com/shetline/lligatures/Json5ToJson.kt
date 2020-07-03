@@ -56,8 +56,6 @@ class Json5ToJson {
           .replace(Regex(""",(?=\s*[]}])"""), "")
       }
 
-      println(parts.joinToString(""))
-
       return parts.joinToString("")
     }
   }

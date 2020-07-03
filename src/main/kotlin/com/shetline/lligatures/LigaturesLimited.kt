@@ -219,7 +219,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     registrar.registerTextEditorHighlightingPass(
       this,
       TextEditorHighlightingPassRegistrar.Anchor.LAST,
-      Pass.LAST_PASS,
+      Pass.UPDATE_ALL,
       false,
       false
     )
@@ -361,7 +361,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       if (a.startOffset != b.startOffset) a.startOffset - b.startOffset else b.endOffset - a.endOffset
     })
 
-    return highlighters.filter { h -> h.layer < MY_LIGATURE_LAYER && h.textAttributes?.foregroundColor != null }
+    return highlighters.filter { h -> !isMyLayer(h.layer) && h.textAttributes?.foregroundColor != null }
   }
 
   // Not quite close enough to any pre-defined binary search to avoid handling this as a special case
@@ -434,6 +434,11 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private const val MY_LIGATURE_LAYER = HighlighterLayer.SELECTION + 33
     private const val MY_LIGATURE_BACKGROUND_LAYER = HighlighterLayer.SELECTION - 33
     private const val MY_SELECTION_LAYER = MY_LIGATURE_LAYER + 1
+
+    private fun isMyLayer(layer: Int): Boolean {
+      return layer == MY_LIGATURE_LAYER || layer == MY_LIGATURE_BACKGROUND_LAYER || layer == MY_SELECTION_LAYER
+    }
+
     private val baseLigatures = ("""
 
   .= ..= .- := =:= == != === !== =/= <-< <<- <-- <- <-> -> --> ->> >-> <=< <<= <== <=> => ==> =!= =:=
