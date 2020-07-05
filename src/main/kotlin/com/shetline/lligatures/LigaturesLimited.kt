@@ -149,8 +149,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       ApplicationManager.getApplication().invokeLater {
         val oldHighlighters = syntaxHighlighters[editor]
 
-        if (oldHighlighters != null) {
-          oldHighlighters.forEach { highlighter -> editor.markupModel.removeHighlighter(highlighter) }
+        if (oldHighlighters != null && editor is EditorImpl) {
+          oldHighlighters.forEach { highlighter -> editor.filteredDocumentMarkupModel.removeHighlighter(highlighter) }
           syntaxHighlighters.remove(editor)
         }
 
@@ -167,7 +167,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     if (editor !is EditorImpl || highlighters.isEmpty())
       return
 
-    val markupModel = editor.markupModel
+    val markupModel = editor.filteredDocumentMarkupModel
     val newHighlights = ArrayList<RangeHighlighter>()
     val existingHighlighters = getHighlighters(editor)
 
@@ -272,11 +272,11 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   }
 
   private fun highlightForCaret(editor: Editor, pos: LogicalPosition?) {
-    if (pos == null)
+    if (pos == null || editor !is EditorImpl)
       return
 
     val doc = editor.document
-    val markupModel = editor.markupModel
+    val markupModel = editor.filteredDocumentMarkupModel
     val oldHighlights = cursorHighlighters[editor]
     val mode = settings.state!!.cursorMode
 

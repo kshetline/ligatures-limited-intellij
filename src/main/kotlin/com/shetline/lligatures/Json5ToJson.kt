@@ -50,7 +50,7 @@ class Json5ToJson {
           // Remove comments
           .replace(Regex("""\s*//.*$""", RegexOption.MULTILINE), "")
           .replace(Regex("""\s*/\*.*?\*/""", RegexOption.DOT_MATCHES_ALL), "")
-          // Quote unquoted identifiers -- regex here is just good enough for needed identifiers, not all valid ones
+          // Quote unquoted identifiers -- regex just good enough for needed identifiers, not all valid identifiers
           .replace(Regex("""\b([a-zA-Z_]+)(?=\s*:)"""), "\"$1\"")
           // Clean up trailing commas
           .replace(Regex(""",(?=\s*[]}])"""), "")
