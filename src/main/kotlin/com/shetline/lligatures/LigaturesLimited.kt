@@ -15,6 +15,7 @@ import com.intellij.openapi.editor.event.CaretEvent
 import com.intellij.openapi.editor.event.CaretListener
 import com.intellij.openapi.editor.event.EditorFactoryEvent
 import com.intellij.openapi.editor.event.EditorFactoryListener
+import com.intellij.openapi.editor.ex.util.LexerEditorHighlighter
 import com.intellij.openapi.editor.impl.EditorImpl
 import com.intellij.openapi.editor.markup.*
 import com.intellij.openapi.fileTypes.SyntaxHighlighter
@@ -105,7 +106,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
             val phase = (matchIndex + i) % 2
             val foreground = if (debug) colors[phase] else null
 
-            newHighlights.add(LigatureHighlight(foreground, elem, category, matchText, matchIndex + i, 1, null))
+            newHighlights.add(LigatureHighlight(foreground, elem, matchText, matchIndex + i, 1, null))
           }
 
           lastDebugHighlight = null
@@ -115,8 +116,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
               lastDebugCategory == category )
             lastDebugHighlight.span += matchText.length
           else {
-            lastDebugHighlight = LigatureHighlight(DEBUG_GREEN, elem, category, matchText, matchIndex,
-              matchText.length, null)
+            lastDebugHighlight = LigatureHighlight(DEBUG_GREEN, elem, matchText, matchIndex, matchText.length, null)
             lastDebugCategory = category
             newHighlights.add(lastDebugHighlight)
           }
@@ -173,35 +173,42 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     for (highlighter in highlighters) {
       val foreground = highlighter.color ?:
-        getHighlightColors(highlighter.elem, highlighter.category, highlighter.ligature, highlighter.index, highlighter.span,
+        getHighlightColors(highlighter.elem, highlighter.ligature, highlighter.index, highlighter.span,
           syntaxHighlighter, editor, editor.colorsScheme,
           defaultForeground, existingHighlighters)[highlighter.index % 2]
       val background = if (highlighter.color != null) defaultForeground else null
 
       try {
-        val newHighlight = markupModel.addRangeHighlighter(
+        var needToAdd = true
+        var newHighlight: RangeHighlighter? = null
+
+        if (highlighter.lastHighlighter != null) {
+          if (foreground != null && foreground == highlighter.lastHighlighter?.textAttributes?.foregroundColor) {
+            needToAdd = false
+            newHighlight = highlighter.lastHighlighter!!
+          }
+          else
+            markupModel.removeHighlighter(highlighter.lastHighlighter!!)
+        }
+
+        if (needToAdd) {
+          newHighlight = markupModel.addRangeHighlighter(
             highlighter.index, highlighter.index + highlighter.span, MY_LIGATURE_LAYER,
             TextAttributes(foreground, null, null, EffectType.BOXED, 0),
             HighlighterTargetArea.EXACT_RANGE
           )
-
-        if (highlighter.lastHighlighter != null) {
-          if (foreground != null && foreground == highlighter.lastHighlighter?.textAttributes?.foregroundColor)
-            continue
-
-          markupModel.removeHighlighter(highlighter.lastHighlighter!!)
         }
 
-        newHighlights.add(newHighlight)
+        newHighlights.add(newHighlight!!)
         highlighter.lastHighlighter = newHighlight
 
-        if (background != null) {
+        if (background != null && count == 0) {
           // Apply background at lower layer so selection layer can override it
-          newHighlights.add(markupModel.addRangeHighlighter(
+          markupModel.addRangeHighlighter(
             highlighter.index, highlighter.index + highlighter.span, MY_LIGATURE_BACKGROUND_LAYER,
             TextAttributes(null, background, null, EffectType.BOXED, 0),
             HighlighterTargetArea.EXACT_RANGE
-          ))
+          )
         }
       }
       catch (e: Exception) {
@@ -303,10 +310,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         val elem = file.findElementAt(lineStart + lig.range.first)
 
         if (elem != null) {
-          val category = ElementCategorizer.categoryFor(elem, lig.value, lineStart + lig.range.first)
-
           for (i in lig.range) {
-            val colors = if (!debug) getHighlightColors(elem, category, lig.value, lineStart + i, 1,
+            val colors = if (!debug) getHighlightColors(elem, lig.value, lineStart + i, 1,
                 syntaxHighlighter, editor, editor.colorsScheme, defaultForeground)
               else getMatchingColors(DEBUG_RED)
 
@@ -331,9 +336,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     copyBean(state, this)
   }
 
-  private fun getHighlightColors(elem: PsiElement, category: ElementCategory,
-      ligature: String, textOffset: Int, span: Int,
-      syntaxHighlighter: SyntaxHighlighter, editor: Editor?,
+  private fun getHighlightColors(elem: PsiElement, ligature: String, textOffset: Int, span: Int,
+      syntaxHighlighter: SyntaxHighlighter, editor: EditorImpl?,
       colorsScheme: TextAttributesScheme, defaultForeground: Color,
       defaultHighlighters: List<RangeHighlighter>? = null): Array<Color?> {
     var color: Color? = null
@@ -364,10 +368,16 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       }
     }
 
-    if (color == null &&
-        (category == ElementCategory.STRING || category == ElementCategory.TEXT ||
-         category == ElementCategory.LINE_COMMENT || category == ElementCategory.BLOCK_COMMENT ||
-         ElementCategorizer.opRegex.matches(ligature))) {
+    if (color == null && editor?.highlighter is LexerEditorHighlighter) {
+      val attrs = (editor.highlighter as LexerEditorHighlighter)
+        .getAttributesForPreviousAndTypedChars(editor.document, textOffset, ligature[0])
+
+      if (attrs.isNotEmpty()) {
+        color = attrs[0].foregroundColor
+      }
+    }
+
+    if (color == null) {
       val type = elem.elementType ?: elem.node.elementType
       val textAttrKeys = syntaxHighlighter.getTokenHighlights(type)
       val textAttrs = getTextAttributes(colorsScheme, textAttrKeys)
@@ -383,7 +393,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     if (editor !is EditorImpl)
       return listOf()
 
-    val highlighters = editor.filteredDocumentMarkupModel.allHighlighters
+    val highlighters = arrayOf(*editor.markupModel.allHighlighters, *editor.filteredDocumentMarkupModel.allHighlighters)
 
     highlighters.sortWith(Comparator { a, b ->
       if (a.startOffset != b.startOffset) a.startOffset - b.startOffset else b.endOffset - a.endOffset
@@ -472,7 +482,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   data class LigatureHighlight (
     var color: Color?,
     var elem: PsiElement,
-    var category: ElementCategory,
     var ligature: String,
     var index: Int,
     var span: Int,

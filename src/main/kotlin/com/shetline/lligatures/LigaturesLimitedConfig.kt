@@ -11,6 +11,7 @@ import com.intellij.openapi.project.ProjectManager
 import com.intellij.ui.LanguageTextField
 import com.shetline.lligatures.Json5ToJson.Companion.json5toJson
 import com.shetline.lligatures.LigaturesLimitedSettings.CursorMode
+import com.shetline.lligatures.LigaturesLimitedSettings.LigatureConfigJson
 import com.shetline.lligatures.LigaturesLimitedSettings.SettingsState
 import java.awt.BorderLayout
 import java.awt.Font
@@ -44,7 +45,8 @@ class LigaturesLimitedConfig : Configurable, Disposable {
 
   override fun apply() {
     try {
-      klaxon.parseJsonObject(StringReader(json5toJson(jsonConfig.text)))
+      val config = klaxon.parse<LigatureConfigJson>(StringReader(json5toJson(jsonConfig.text)))
+      println(config)
     }
     catch (e: Exception) {
       throw ConfigurationException(e.message)

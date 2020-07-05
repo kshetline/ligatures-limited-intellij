@@ -29,7 +29,7 @@ open class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedS
     var json = """{
   "disregarded": "ff fi fl ffi ffl", // These ligatures will neither be actively enabled nor suppressed
   "languages": {
-    "markdown": true // All ligatures enabled in all contexts for Markdown
+    "markdown": true // All ligatures will be enabled in all contexts for Markdown
   },
   "ligaturesByContext": {
     "number": {
@@ -38,6 +38,26 @@ open class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedS
   }
 }"""
   }
+
+  data class ContextConfigJson (
+    var debug: Boolean? = null,
+    var ligatures: String? = null
+  )
+
+  data class LanguageConfigJson (
+    var contexts: String? = null,
+    var debug: Boolean? = null,
+    var ligatures: String? = null,
+    var ligaturesByContext: HashMap<String, ContextConfigJson>? = null
+  )
+
+  data class LigatureConfigJson (
+    var contexts: String? = null,
+    var debug: Boolean? = null,
+    var languages: HashMap<String, Any>? = null,
+    var ligatures: String? = null,
+    var ligaturesByContext: HashMap<String, ContextConfigJson>? = null
+  )
 
   data class ContextConfig (
     var debug: Boolean,
@@ -51,7 +71,7 @@ open class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedS
     var ligatures: HashSet<String>,
     var ligaturesByContext: HashMap<String, ContextConfig>,
     var ligaturesListedAreEnabled: Boolean,
-    var selectionMode: LigaturesLimitedSettings.CursorMode
+    var selectionMode: CursorMode
   )
 
   companion object {
