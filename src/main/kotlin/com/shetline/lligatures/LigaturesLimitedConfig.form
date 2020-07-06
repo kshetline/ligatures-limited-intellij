@@ -4,7 +4,11 @@
     <constraints>
       <xy x="20" y="20" width="729" height="490"/>
     </constraints>
-    <properties/>
+    <properties>
+      <maximumSize width="640" height="640"/>
+      <minimumSize width="480" height="480"/>
+      <preferredSize width="640" height="-1"/>
+    </properties>
     <border type="none">
       <color color="-4473925"/>
     </border>
@@ -12,7 +16,11 @@
       <grid id="27dc6" layout-manager="GridLayoutManager" row-count="5" column-count="2" same-size-horizontally="false" same-size-vertically="false" hgap="-1" vgap="4">
         <margin top="8" left="8" bottom="8" right="8"/>
         <constraints border-constraint="North"/>
-        <properties/>
+        <properties>
+          <maximumSize width="640" height="200"/>
+          <minimumSize width="480" height="163"/>
+          <preferredSize width="640" height="163"/>
+        </properties>
         <border type="none"/>
         <children>
           <component id="ded8a" class="javax.swing.JLabel">
@@ -91,7 +99,11 @@
       </grid>
       <component id="ad4a8" class="com.intellij.ui.LanguageTextField" binding="jsonConfig">
         <constraints border-constraint="Center"/>
-        <properties/>
+        <properties>
+          <maximumSize width="640" height="480"/>
+          <minimumSize width="480" height="320"/>
+          <preferredSize width="640" height="480"/>
+        </properties>
       </component>
     </children>
   </grid>
