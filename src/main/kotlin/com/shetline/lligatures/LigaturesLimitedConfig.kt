@@ -5,6 +5,7 @@ import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
 import com.intellij.json.json5.Json5Language
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.options.ConfigurationException
 import com.intellij.openapi.project.ProjectManager
@@ -15,6 +16,8 @@ import com.shetline.lligatures.LigaturesLimitedSettings.LigatureConfigJson
 import com.shetline.lligatures.LigaturesLimitedSettings.SettingsState
 import java.awt.BorderLayout
 import java.awt.Font
+import java.awt.event.ComponentAdapter
+import java.awt.event.ComponentEvent
 import java.io.StringReader
 import javax.swing.*
 
@@ -71,16 +74,35 @@ class LigaturesLimitedConfig : Configurable, Disposable {
     val scheme = EditorColorsManager.getInstance().globalScheme
     val project = if (projects.isNotEmpty()) projects[0] else projectManager.defaultProject
     val parent = jsonConfig.parent
+    val newJsonConfig = LanguageTextField(Json5Language.INSTANCE, project, configState?.json ?: "")
+
+    newJsonConfig.font = Font(scheme.editorFontName, Font.PLAIN, scheme.editorFontSize)
+    newJsonConfig.setOneLineMode(false)
+    newJsonConfig.minimumSize = jsonConfig.minimumSize
+    newJsonConfig.preferredSize = jsonConfig.preferredSize
+    newJsonConfig.maximumSize = jsonConfig.maximumSize
+    newJsonConfig.autoscrolls = true
 
     parent.remove(jsonConfig)
-    jsonConfig = LanguageTextField(Json5Language.INSTANCE, project, configState?.json ?: "")
-    jsonConfig.font = Font(scheme.editorFontName, Font.PLAIN, scheme.editorFontSize)
-    jsonConfig.setOneLineMode(false)
+    jsonConfig = newJsonConfig
+    jsonConfig.addComponentListener(MyComponentAdapter())
     parent.add(BorderLayout.CENTER, jsonConfig)
 
     restoreDefaults.addActionListener { reset(SettingsState()) }
 
     return wrapper
+  }
+
+  inner class MyComponentAdapter : ComponentAdapter() {
+    override fun componentResized(e: ComponentEvent?) {
+      componentShown(e)
+    }
+
+    override fun componentShown(e: ComponentEvent?) {
+      jsonConfig.editor?.settings?.isLineNumbersShown = true
+      (jsonConfig.editor as? EditorEx)?.setHorizontalScrollbarVisible(true)
+      (jsonConfig.editor as? EditorEx)?.setVerticalScrollbarVisible(true)
+    }
   }
 
   override fun reset() {
