@@ -381,7 +381,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
             break
         }
       }
-      finally {}
+      catch (e: Exception) {}
     }
 
     if (color == null) {

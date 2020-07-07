@@ -1,6 +1,5 @@
 package com.shetline.lligatures
 
-import com.beust.klaxon.Klaxon
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
 import com.intellij.json.json5.Json5Language
 import com.intellij.openapi.Disposable
@@ -10,15 +9,13 @@ import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.options.ConfigurationException
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.ui.LanguageTextField
-import com.shetline.lligatures.Json5ToJson.Companion.json5toJson
+import com.shetline.lligatures.LigaturesLimitedSettings.Companion.parseJson
 import com.shetline.lligatures.LigaturesLimitedSettings.CursorMode
-import com.shetline.lligatures.LigaturesLimitedSettings.LigatureConfigJson
 import com.shetline.lligatures.LigaturesLimitedSettings.SettingsState
 import java.awt.BorderLayout
 import java.awt.Font
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
-import java.io.StringReader
 import javax.swing.*
 
 class LigaturesLimitedConfig : Configurable, Disposable {
@@ -29,7 +26,6 @@ class LigaturesLimitedConfig : Configurable, Disposable {
   private lateinit var jsonConfig: LanguageTextField
   private lateinit var restoreDefaults: JButton
 
-  private val klaxon = Klaxon()
   private val configState
     get() = LigaturesLimitedSettings.instance.state
 
@@ -48,8 +44,7 @@ class LigaturesLimitedConfig : Configurable, Disposable {
 
   override fun apply() {
     try {
-      val config = klaxon.parse<LigatureConfigJson>(StringReader(json5toJson(jsonConfig.text)))
-      println(config)
+      println(parseJson(jsonConfig.text))
     }
     catch (e: Exception) {
       throw ConfigurationException(e.message)
