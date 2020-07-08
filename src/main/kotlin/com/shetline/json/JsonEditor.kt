@@ -47,9 +47,6 @@ class JsonEditor(project: Project, value: String? = ""):
       val indentKeys = getKeys(content, KeyboardFocusManager.FORWARD_TRAVERSAL_KEYS, "pressed TAB")
       val unindentKeys = getKeys(content, KeyboardFocusManager.BACKWARD_TRAVERSAL_KEYS, "shift pressed TAB")
 
-      println(indentKeys)
-      println(unindentKeys)
-
       editor.settings.isLineNumbersShown = true
       content.focusTraversalKeysEnabled = false
       content.addKeyListener(object: KeyAdapter() {
