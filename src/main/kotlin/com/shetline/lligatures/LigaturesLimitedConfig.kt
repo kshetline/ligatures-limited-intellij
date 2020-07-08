@@ -1,23 +1,16 @@
 package com.shetline.lligatures
 
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
-import com.intellij.json.json5.Json5Language
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.editor.colors.EditorColorsManager
-import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.options.ConfigurationException
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.ui.LanguageTextField
+import com.shetline.json.JsonEditor
 import com.shetline.lligatures.LigaturesLimitedSettings.Companion.parseJson
 import com.shetline.lligatures.LigaturesLimitedSettings.CursorMode
 import com.shetline.lligatures.LigaturesLimitedSettings.SettingsState
 import java.awt.BorderLayout
-import java.awt.Font
-import java.awt.event.ComponentAdapter
-import java.awt.event.ComponentEvent
-import java.awt.event.KeyAdapter
-import java.awt.event.KeyEvent
 import javax.swing.*
 
 class LigaturesLimitedConfig : Configurable, Disposable {
@@ -68,67 +61,20 @@ class LigaturesLimitedConfig : Configurable, Disposable {
 
     val projectManager: ProjectManager = ProjectManager.getInstance()
     val projects = projectManager.openProjects
-    val scheme = EditorColorsManager.getInstance().globalScheme
     val project = if (projects.isNotEmpty()) projects[0] else projectManager.defaultProject
     val parent = jsonConfig.parent
-    val newJsonConfig = LanguageTextField(Json5Language.INSTANCE, project, configState?.json ?: "")
+    val newJsonConfig = JsonEditor(project, configState?.json)
 
-    newJsonConfig.font = Font(scheme.editorFontName, Font.PLAIN, scheme.editorFontSize)
-    newJsonConfig.setOneLineMode(false)
     newJsonConfig.minimumSize = jsonConfig.minimumSize
     newJsonConfig.preferredSize = jsonConfig.preferredSize
     newJsonConfig.maximumSize = jsonConfig.maximumSize
-    newJsonConfig.autoscrolls = true
-
     parent.remove(jsonConfig)
     jsonConfig = newJsonConfig
-    jsonConfig.addComponentListener(MyComponentAdapter())
     parent.add(BorderLayout.CENTER, jsonConfig)
 
     restoreDefaults.addActionListener { reset(SettingsState()) }
 
     return wrapper
-  }
-
-  inner class MyComponentAdapter : ComponentAdapter() {
-    private var initDone = false
-
-    override fun componentResized(e: ComponentEvent?) {
-      componentShown(e)
-    }
-
-    override fun componentShown(e: ComponentEvent?) {
-      val editor = jsonConfig.editor as? EditorEx
-
-      if (editor == null || initDone)
-        return
-
-      editor.settings.isLineNumbersShown = true
-      editor.contentComponent.focusTraversalKeysEnabled = false
-      editor.contentComponent.addKeyListener(object: KeyAdapter() {
-        override fun keyPressed(e: KeyEvent?) {
-          if (e != null && e.modifiersEx == 0 && e.keyChar == '\t')
-            insertTab(editor, e)
-        }
-      })
-      editor.setHorizontalScrollbarVisible(true)
-      editor.setVerticalScrollbarVisible(true)
-
-      initDone = true
-    }
-  }
-
-  private fun insertTab(editor: EditorEx, origEvent: KeyEvent) {
-    val event = KeyEvent(origEvent.component, KeyEvent.KEY_TYPED, origEvent.`when`, 0, KeyEvent.VK_UNDEFINED, ' ')
-    val tabSize = 2
-
-    for (caret in editor.caretModel.allCarets) {
-      val column = caret.logicalPosition.column
-      val spaces = tabSize - column % tabSize
-
-      for (i in 1..spaces)
-        editor.processKeyTyped(event)
-    }
   }
 
   override fun reset() {

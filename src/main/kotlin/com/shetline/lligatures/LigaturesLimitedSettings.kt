@@ -5,7 +5,7 @@ import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.components.ServiceManager
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
-import com.shetline.lligatures.Json5ToJson.Companion.json5toJson
+import com.shetline.json.Json5ToJson.Companion.json5toJson
 import java.lang.reflect.Type
 
 @State(

@@ -1,4 +1,4 @@
-package com.shetline.lligatures
+package com.shetline.json
 
 class Json5ToJson {
   companion object {
