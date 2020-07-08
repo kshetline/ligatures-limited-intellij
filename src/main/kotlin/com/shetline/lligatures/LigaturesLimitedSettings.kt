@@ -42,32 +42,28 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
 }"""
   }
 
-  data class ContextConfig (
-    var debug: Boolean,
-    var ligatures: MutableSet<String>,
-    var ligaturesListedAreEnabled: Boolean
+  open class ContextConfig (
+    var debug: Boolean = false,
+    var ligatures: MutableSet<String> = mutableSetOf(),
+    var ligaturesListedAreEnabled: Boolean = false
   )
 
-  data class LanguageConfig (
-    var contexts: MutableSet<String>,
-    var debug: Boolean,
-    var inherit: String,
-    var ligatures: MutableSet<String>,
-    var ligaturesListedAreEnabled: Boolean,
-    var ligaturesByContext: MutableMap<String, ContextConfig>? = null
-  )
+  open class LanguageConfig (
+    var contexts: MutableSet<ElementCategory> = mutableSetOf(),
+    var inherit: String? = null,
+    var ligaturesByContext: MutableMap<String, ContextConfig> = mutableMapOf()
+  ) : ContextConfig()
 
-  data class GlobalConfig (
-      var contexts: MutableSet<ElementCategory> = mutableSetOf(ElementCategory.OPERATOR, ElementCategory.PUNCTUATION,
-        ElementCategory.COMMENT_MARKER),
-      var debug: Boolean = false,
+  open class GlobalConfig (
       var disregarded: MutableSet<String> = mutableSetOf(),
       var languages: MutableMap<String, LanguageConfig> = mutableMapOf(),
-      var ligatures: MutableSet<String> = mutableSetOf("ff", "fi", "fl", "ffi", "ffl", "0xF", "0o7", "0b1", "9x9"),
-      var ligaturesByContext: MutableMap<String, ContextConfig> = mutableMapOf(),
-      var ligaturesListedAreEnabled: Boolean = false,
       var globalLigatures: MutableSet<String> = mutableSetOf()
-  )
+  ) : LanguageConfig() {
+    init {
+      contexts = mutableSetOf(ElementCategory.OPERATOR, ElementCategory.PUNCTUATION, ElementCategory.COMMENT_MARKER)
+      ligatures = mutableSetOf("ff", "fi", "fl", "ffi", "ffl", "0xF", "0o7", "0b1", "9x9")
+    }
+  }
 
   companion object {
     private val gson = GsonBuilder()
@@ -96,10 +92,13 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
 
     private class MyDeserializer : JsonDeserializer<GlobalConfig> {
       override fun deserialize(elem: JsonElement?, type: Type?, context: JsonDeserializationContext?): GlobalConfig {
-        if (elem == null || !elem.isJsonObject)
-          throw JsonParseException("JSON object expected for configuration")
+        return deserializeAux(GlobalConfig(), "configuration", elem)
+      }
 
-        val result = GlobalConfig()
+      private fun <T : LanguageConfig> deserializeAux(result: T, name: String, elem: JsonElement?): T {
+        if (elem == null || !elem.isJsonObject)
+          throw JsonParseException("JSON object expected for $name")
+
         val root = elem as JsonObject
         val globalAddBacks = mutableSetOf<String>()
         var languages: JsonElement? = null
@@ -108,13 +107,19 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
         for (key in root.keySet()) {
           val child = root.get(key)
 
+          if (result !is GlobalConfig && setOf("disregarded", "languages").contains(key) ||
+              result is GlobalConfig && key == "inherit")
+            throw JsonParseException("Unknown JSON field '$key' in '$name'")
+
           when (key) {
             "contexts" -> applyContextList(child, result.contexts, key)
             "debug" -> result.debug = if (!child.isBoolean)
                 throw JsonParseException("JSON boolean expected for 'debug'")
               else
                 child.asBoolean
-            "disregarded" -> result.disregarded.addAll(getStringArray(child, key))
+            "disregarded" -> if (result is GlobalConfig) result.disregarded.addAll(getStringArray(child, key))
+            "inherit" -> result.inherit = if (child.isString) child.asString else
+              throw JsonParseException("JSON string expected for 'inherit'")
             "languages" -> languages = if (child.isJsonObject) child else
               throw JsonParseException("JSON object expected for 'languages' configuration")
             "ligatures" -> result.ligaturesListedAreEnabled = applyLigatureList(child, result.ligatures,
@@ -125,21 +130,47 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
           }
         }
 
-        if (languages != null)
-          deserializeLanguages(languages, result.languages)
+        if (languages != null && result is GlobalConfig)
+          deserializeLanguages(languages, result.languages, result)
 
         if (ligaturesByContext != null)
           deserializeLigaturesByContext(ligaturesByContext, result.ligaturesByContext)
 
-        result.globalLigatures.addAll(baseLigatures)
-        result.globalLigatures.removeAll(result.disregarded)
-        result.globalLigatures.addAll(globalAddBacks)
+        if (result is GlobalConfig) {
+          result.globalLigatures.addAll(baseLigatures)
+          result.globalLigatures.removeAll(result.disregarded)
+          result.globalLigatures.addAll(globalAddBacks)
+        }
 
         return result
       }
-    }
 
-    private fun deserializeLanguages(elem: JsonElement, languages: MutableMap<String, LanguageConfig>) {
+      private fun deserializeLanguages(elem: JsonElement, languages: MutableMap<String, LanguageConfig>,
+          parent: LanguageConfig) {
+        if (!elem.isJsonObject)
+          throw JsonParseException("JSON object expected for languages")
+
+        val root = elem as JsonObject
+
+        for (key in root.keySet()) {
+          val child = root.get(key)
+
+          if (!child.isBoolean && !child.isJsonObject)
+            throw JsonParseException("Language settings must be an object or a boolean")
+
+          if (child.isJsonObject) {
+            val language = LanguageConfig()
+
+            language.contexts.addAll(parent.contexts)
+            language.debug = parent.debug
+            language.ligatures.addAll(parent.ligatures)
+            language.ligaturesListedAreEnabled = parent.ligaturesListedAreEnabled
+            language.ligaturesByContext = parent.ligaturesByContext.toMutableMap()
+
+            languages[key] = deserializeAux(language, key, child)
+          }
+        }
+      }
     }
 
     private fun deserializeLigaturesByContext(elem: JsonElement, contexts: MutableMap<String, ContextConfig>) {

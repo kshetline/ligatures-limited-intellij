@@ -73,6 +73,7 @@ class LigaturesLimitedConfig : Configurable, Disposable {
 
     newJsonConfig.font = Font(scheme.editorFontName, Font.PLAIN, scheme.editorFontSize)
     newJsonConfig.setOneLineMode(false)
+    newJsonConfig.focusTraversalKeysEnabled = false
     newJsonConfig.minimumSize = jsonConfig.minimumSize
     newJsonConfig.preferredSize = jsonConfig.preferredSize
     newJsonConfig.maximumSize = jsonConfig.maximumSize
