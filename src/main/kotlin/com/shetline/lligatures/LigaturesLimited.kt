@@ -350,7 +350,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val startIndex = findFirstIndex(highlighters, startOffset)
 
     if (startIndex >= 0) {
-      for (i in startIndex..highlighters.size) {
+      for (i in startIndex until highlighters.size) {
         val highlighter = highlighters[i]
 
         if (highlighter.startOffset <= startOffset && endOffset <= highlighter.endOffset) {

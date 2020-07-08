@@ -16,6 +16,8 @@ import java.awt.BorderLayout
 import java.awt.Font
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
+import java.awt.event.KeyAdapter
+import java.awt.event.KeyEvent
 import javax.swing.*
 
 class LigaturesLimitedConfig : Configurable, Disposable {
@@ -73,7 +75,6 @@ class LigaturesLimitedConfig : Configurable, Disposable {
 
     newJsonConfig.font = Font(scheme.editorFontName, Font.PLAIN, scheme.editorFontSize)
     newJsonConfig.setOneLineMode(false)
-    newJsonConfig.focusTraversalKeysEnabled = false
     newJsonConfig.minimumSize = jsonConfig.minimumSize
     newJsonConfig.preferredSize = jsonConfig.preferredSize
     newJsonConfig.maximumSize = jsonConfig.maximumSize
@@ -90,14 +91,43 @@ class LigaturesLimitedConfig : Configurable, Disposable {
   }
 
   inner class MyComponentAdapter : ComponentAdapter() {
+    private var initDone = false
+
     override fun componentResized(e: ComponentEvent?) {
       componentShown(e)
     }
 
     override fun componentShown(e: ComponentEvent?) {
-      jsonConfig.editor?.settings?.isLineNumbersShown = true
-      (jsonConfig.editor as? EditorEx)?.setHorizontalScrollbarVisible(true)
-      (jsonConfig.editor as? EditorEx)?.setVerticalScrollbarVisible(true)
+      val editor = jsonConfig.editor as? EditorEx
+
+      if (editor == null || initDone)
+        return
+
+      editor.settings.isLineNumbersShown = true
+      editor.contentComponent.focusTraversalKeysEnabled = false
+      editor.contentComponent.addKeyListener(object: KeyAdapter() {
+        override fun keyPressed(e: KeyEvent?) {
+          if (e != null && e.modifiersEx == 0 && e.keyChar == '\t')
+            insertTab(editor, e)
+        }
+      })
+      editor.setHorizontalScrollbarVisible(true)
+      editor.setVerticalScrollbarVisible(true)
+
+      initDone = true
+    }
+  }
+
+  private fun insertTab(editor: EditorEx, origEvent: KeyEvent) {
+    val event = KeyEvent(origEvent.component, KeyEvent.KEY_TYPED, origEvent.`when`, 0, KeyEvent.VK_UNDEFINED, ' ')
+    val tabSize = 2
+
+    for (caret in editor.caretModel.allCarets) {
+      val column = caret.logicalPosition.column
+      val spaces = tabSize - column % tabSize
+
+      for (i in 1..spaces)
+        editor.processKeyTyped(event)
     }
   }
 
