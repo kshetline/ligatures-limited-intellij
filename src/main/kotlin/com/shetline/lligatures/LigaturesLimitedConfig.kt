@@ -15,7 +15,6 @@ import javax.swing.*
 
 class LigaturesLimitedConfig : Configurable, Disposable {
   private lateinit var wrapper: JPanel
-  private lateinit var contexts: JTextField
   private lateinit var cursorMode: JComboBox<CursorMode>
   private lateinit var debug: JCheckBox
   private lateinit var jsonConfig: LanguageTextField
@@ -26,7 +25,6 @@ class LigaturesLimitedConfig : Configurable, Disposable {
 
   override fun isModified(): Boolean {
     return (
-      contexts.text != configState?.contexts ||
       cursorMode.selectedItem != configState?.cursorMode ||
       debug.isSelected != configState?.debug ||
       jsonConfig.text != configState?.json
@@ -45,7 +43,6 @@ class LigaturesLimitedConfig : Configurable, Disposable {
       throw ConfigurationException(e.message)
     }
 
-    configState?.contexts = contexts.text
     configState?.cursorMode = cursorMode.selectedItem as CursorMode
     configState?.debug = debug.isSelected
     configState?.json = jsonConfig.text
@@ -82,7 +79,6 @@ class LigaturesLimitedConfig : Configurable, Disposable {
   }
 
   private fun reset(state: SettingsState?) {
-    contexts.text = state?.contexts ?: ""
     cursorMode.selectedItem = state?.cursorMode ?: CursorMode.CURSOR
     debug.isSelected = state?.debug ?: false
     jsonConfig.text = state?.json ?: ""

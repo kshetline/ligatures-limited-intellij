@@ -67,9 +67,9 @@ class JsonEditor(project: Project, value: String? = ""):
   }
 
   private fun getKeys(component: JComponent, whichKeys: Int, default: String): List<String> {
-    val indentKeys = component.getFocusTraversalKeys(whichKeys)?.map { key -> key.toString() }
+    val keys = component.getFocusTraversalKeys(whichKeys)?.map { key -> key.toString() }
 
-    return if (indentKeys == null || indentKeys.isEmpty()) listOf(default) else indentKeys
+    return if (keys == null || keys.isEmpty()) listOf(default) else keys
   }
 
   private fun performAction(editor: EditorEx, action: EditorAction) {
