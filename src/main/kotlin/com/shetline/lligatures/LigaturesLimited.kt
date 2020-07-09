@@ -106,7 +106,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
             val phase = (matchIndex + i) % 2
             val foreground = if (debug) colors[phase] else null
 
-            newHighlights.add(LigatureHighlight(foreground, elem, matchText, matchIndex + i, 1, null))
+            newHighlights.add(LigatureHighlight(foreground, elem, matchText, matchIndex + i, 1, null, null))
           }
 
           lastDebugHighlight = null
@@ -117,7 +117,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
             lastDebugHighlight.span += matchText.length
           else {
             lastDebugHighlight = LigatureHighlight(DEBUG_GREEN, elem, matchText, matchIndex,
-              matchText.length, null)
+              matchText.length, null, null)
             lastDebugCategory = category
             newHighlights.add(lastDebugHighlight)
           }
@@ -203,13 +203,16 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         newHighlights.add(newHighlight!!)
         highlighter.lastHighlighter = newHighlight
 
-        if (background != null && count == 0) {
-          // Apply background at lower layer so selection layer can override it
-          markupModel.addRangeHighlighter(
-            highlighter.index, highlighter.index + highlighter.span, MY_LIGATURE_BACKGROUND_LAYER,
-            TextAttributes(null, background, null, EffectType.BOXED, 0),
-            HighlighterTargetArea.EXACT_RANGE
-          )
+        if (background != null) {
+          if (highlighter.lastBackground == null) {
+            // Apply background at lower layer so selection layer can override it
+            highlighter.lastBackground = markupModel.addRangeHighlighter(
+              highlighter.index, highlighter.index + highlighter.span, MY_LIGATURE_BACKGROUND_LAYER,
+              TextAttributes(null, background, null, EffectType.BOXED, 0),
+              HighlighterTargetArea.EXACT_RANGE)
+          }
+
+          newHighlights.add(highlighter.lastBackground!!)
         }
       }
       catch (e: Exception) {
@@ -374,7 +377,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         val attrs = (editor.highlighter as LexerEditorHighlighter)
           .getAttributesForPreviousAndTypedChars(editor.document, textOffset, ligature[0])
 
-        for (attr in attrs) {
+        for (attr in attrs.reversed()) {
           color = attr.foregroundColor
 
           if (color != null)
@@ -492,7 +495,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     var ligature: String,
     var index: Int,
     var span: Int,
-    var lastHighlighter: RangeHighlighter?
+    var lastHighlighter: RangeHighlighter?,
+    var lastBackground: RangeHighlighter?
   )
 
   companion object {
