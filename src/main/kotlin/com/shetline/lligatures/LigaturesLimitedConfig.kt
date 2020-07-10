@@ -27,7 +27,7 @@ class LigaturesLimitedConfig : Configurable, Disposable {
     return (
       cursorMode.selectedItem != configState?.cursorMode ||
       debug.isSelected != configState?.debug ||
-      jsonConfig.text != configState?.json
+      jsonTrim(jsonConfig.text) != jsonTrim(configState?.json)
     )
   }
 
@@ -45,7 +45,7 @@ class LigaturesLimitedConfig : Configurable, Disposable {
 
     configState?.cursorMode = cursorMode.selectedItem as CursorMode
     configState?.debug = debug.isSelected
-    configState?.json = jsonConfig.text
+    configState?.json = jsonTrim(jsonConfig.text)!!
 
     ProjectManager.getInstance().openProjects.forEach()
       { project -> DaemonCodeAnalyzer.getInstance(project).restart() }
@@ -81,10 +81,10 @@ class LigaturesLimitedConfig : Configurable, Disposable {
   private fun reset(state: SettingsState?) {
     cursorMode.selectedItem = state?.cursorMode ?: CursorMode.CURSOR
     debug.isSelected = state?.debug ?: false
-    jsonConfig.text = state?.json ?: ""
+    jsonConfig.text = jsonTrim(state?.json ?: "")!!
   }
 
-  override fun dispose() {
-    // Nothing to do yet
-  }
+  private fun jsonTrim(s: String?) = s?.trimStart()?.replace(Regex("""[\r\n]+$""", RegexOption.MULTILINE), "\n")
+
+  override fun dispose() {}
 }

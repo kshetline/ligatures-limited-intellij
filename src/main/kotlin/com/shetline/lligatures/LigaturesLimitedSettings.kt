@@ -81,9 +81,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
   },
   "ligatures": "- 0xF 0o7 0b1 9x9", // These ligatures are suppressed
   "ligaturesByContext": {
-    "number": {
-      "ligatures": "+ 0xF 0o7 0b1"
-    }
+    "number": "+ 0xF 0o7 0b1"
   }
 }"""
 
@@ -99,6 +97,8 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
     }
 
     private class MyDeserializer : JsonDeserializer<GlobalConfig> {
+      private val globalAddBacks = mutableSetOf<String>()
+
       override fun deserialize(elem: JsonElement?, type: Type?, context: JsonDeserializationContext?): GlobalConfig {
         return deserializeAux(GlobalConfig(), "configuration", elem)
       }
@@ -108,15 +108,14 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
           throw JsonParseException("JSON object expected for $name")
 
         val root = elem as JsonObject
-        val globalAddBacks = mutableSetOf<String>()
         var languages: JsonElement? = null
         var ligaturesByContext: JsonElement? = null
 
         for (key in root.keySet()) {
-          val child = root.get(key)
+          val child = root[key]
 
           if (result !is GlobalConfig && setOf("disregarded", "languages").contains(key) ||
-              result is GlobalConfig && key == "inherit")
+              result is GlobalConfig && setOf("debug", "inherit").contains(key))
             throw JsonParseException("Unknown JSON field '$key' in '$name'")
 
           when (key) {
@@ -142,7 +141,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
           deserializeLanguages(languages, result.languages, result)
 
         if (ligaturesByContext != null)
-          deserializeLigaturesByContext(ligaturesByContext, result.ligaturesByContext)
+          deserializeLigaturesByContext(ligaturesByContext, result.ligaturesByContext, result)
 
         if (result is GlobalConfig) {
           result.globalLigatures.addAll(baseLigatures)
@@ -204,7 +203,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
           }
 
           if (pending == 0)
-            break;
+            break
         }
 
         if (resolved.size != root.size()) {
@@ -212,23 +211,60 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
           throw JsonParseException("Unresolved language inheritance for: $unresolved")
         }
       }
-    }
 
-    private fun deserializeLigaturesByContext(elem: JsonElement, contexts: MutableMap<String, ContextConfig>) {
-      if (!elem.isJsonObject)
-        throw JsonParseException("JSON object is expected for ligaturesByContext")
+      private fun deserializeLigaturesByContext(elem: JsonElement, contexts: MutableMap<String, ContextConfig>,
+          baseConfig: LanguageConfig) {
+        if (!elem.isJsonObject)
+          throw JsonParseException("JSON object is expected for ligaturesByContext")
 
         val root = elem as JsonObject
 
         for (key in root.keySet()) {
-          val child = root.get(key)
+          val contextInfo0 = root[key]
 
-          if (!child.isJsonObject)
-            throw JsonParseException("Language settings must be an object or a boolean")
+          if (!contextInfo0.isJsonObject && !contextInfo0.isString)
+            throw JsonParseException("Context settings must be an object or a string")
+
+          val contextConfig = ContextConfig()
+
+          contextConfig.debug = baseConfig.debug
+          contextConfig.ligatures.addAll(baseConfig.ligatures)
+          contextConfig.ligaturesListedAreEnabled = baseConfig.ligaturesListedAreEnabled
+
+          if (contextInfo0.isString) {
+            contextConfig.ligaturesListedAreEnabled = applyLigatureList(contextInfo0.asString, contextConfig.ligatures,
+              contextConfig.ligaturesListedAreEnabled, globalAddBacks, key)
+          }
+          else {
+            val contextInfo = contextInfo0 as JsonObject
+
+            for (context in contextInfo.keySet()) {
+              val child = contextInfo[context]
+
+              when (context) {
+                "debug" -> contextConfig.debug = if (!child.isBoolean)
+                    throw JsonParseException("JSON boolean expected for 'debug'")
+                  else
+                    child.asBoolean
+                "ligatures" -> contextConfig.ligaturesListedAreEnabled = applyLigatureList(child, contextConfig.ligatures,
+                  contextConfig.ligaturesListedAreEnabled, globalAddBacks, key)
+                else -> throw JsonParseException("Unknown JSON field '$key'")
+              }
+            }
+          }
+
+          for (contextName in getStringArray(key, true))
+            contexts[contextName] = contextConfig
         }
+      }
     }
 
-    private fun getStringArray(elem: JsonElement, name: String, splitOnComma: Boolean): Array<String> {
+    private fun getStringArray(elem: Any, name: String, splitOnComma: Boolean): Array<String> {
+      if (elem is String)
+        return getStringArray(elem, splitOnComma)
+
+      elem as JsonElement
+
       if (!elem.isJsonPrimitive && !elem.isJsonArray)
         throw JsonParseException("JSON string or string array expected")
 
@@ -254,7 +290,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
       return s.trim().split(if (splitOnComma) Regex("""\s*?[,\s]\s*""") else Regex("""\s+""")).toTypedArray()
     }
 
-    private fun applyLigatureList(elem: JsonElement, ligatureList: MutableSet<String>, listedEnabled: Boolean,
+    private fun applyLigatureList(elem: Any, ligatureList: MutableSet<String>, listedEnabled: Boolean,
                                   globalAddBacks: MutableSet<String>, name: String):
         Boolean {
       val specs = getStringArray(elem, name, false)
@@ -304,7 +340,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
       return listedAreEnabled
     }
 
-    private fun applyContextList(elem: JsonElement, contextList: MutableSet<ElementCategory>, name: String) {
+    private fun applyContextList(elem: Any, contextList: MutableSet<ElementCategory>, name: String) {
       val specs = getStringArray(elem, name, true)
       var enable = true
 
