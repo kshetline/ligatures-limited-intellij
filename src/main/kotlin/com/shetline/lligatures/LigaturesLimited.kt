@@ -83,6 +83,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     }
 
     val debug = settings.state!!.debug
+    val ligatures = settings.state!!.globalMatchLigatures
     var index = 0
     var match: MatchResult? = null
     val syntaxHighlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(file.language, file.project, file.virtualFile)
@@ -91,7 +92,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     var lastDebugHighlight: LigatureHighlight? = null
     var lastDebugCategory: ElementCategory? = null
 
-    while (index < text.length && { match = globalMatchLigatures.find(text, index); match }() != null) {
+    while (index < text.length && { match = ligatures?.find(text, index); match }() != null) {
       val matchIndex = match!!.range.first
       val matchText = match!!.groupValues[0]
       val elem = file.findElementAt(matchIndex)
@@ -132,7 +133,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     if (hIndex > 0 && hIndex < text.length - 1) {
       val extensionCandidate = text.substring(hIndex - 1, hIndex + 1)
-      match = globalMatchLigatures.find(text, index)
+      match = ligatures?.find(text, index)
 
       if (match != null) {
         val elem = file.findElementAt(hIndex)
@@ -234,11 +235,28 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       elem: PsiElement, inCategory: ElementCategory?, baseLanguage: Language?,
       matchText: String, matchIndex: Int
   ): Boolean {
+    val language = baseLanguage.toString().toLowerCase()
     val category = inCategory ?: ElementCategorizer.categoryFor(elem, matchText, matchIndex)
+    val globalConfig = settings.state!!.config!!
+    var langConfig: LigaturesLimitedSettings.LanguageConfig = globalConfig
 
-    return category != ElementCategory.OPERATOR && category != ElementCategory.PUNCTUATION &&
-      category != ElementCategory.COMMENT_MARKER &&
-      !(category == ElementCategory.NUMBER && Regex("""0x[0-9a-f]""", RegexOption.IGNORE_CASE).matches(matchText))
+    if (globalConfig.languages.containsKey(language))
+      langConfig = globalConfig.languages[language]!!
+
+    if (langConfig.fullOnOrOff == true)
+      return false
+    else if (langConfig.fullOnOrOff == false)
+      return true
+
+    var config: LigaturesLimitedSettings.ContextConfig = langConfig
+
+    if (langConfig.ligaturesByContext.containsKey(category))
+      config = langConfig.ligaturesByContext[category]!!
+
+    if (config.ligaturesListedAreEnabled)
+      return !config.ligatures.contains(matchText)
+
+    return config.ligatures.contains(matchText)
   }
 
   override fun clone(): HighlightVisitor = LigaturesLimited()
@@ -300,6 +318,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       return
 
     val file = currentFiles[editor] ?: return
+    val ligatures = settings.state!!.globalMatchLigatures
     val lineStart = doc.getLineStartOffset(pos.line)
     val lineEnd = if (pos.line < doc.lineCount - 1) doc.getLineStartOffset(pos.line + 1) else doc.textLength
     val line = doc.getText(TextRange(lineStart, lineEnd)).trimEnd()
@@ -309,7 +328,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val background = if (debug) EditorColorsManager.getInstance().globalScheme.defaultForeground else null
     val newHighlights = ArrayList<RangeHighlighter>()
 
-    globalMatchLigatures.findAll(line).forEach { lig ->
+    ligatures?.findAll(line)?.forEach { lig ->
       if (mode == CursorMode.LINE || (mode == CursorMode.CURSOR && pos.column in lig.range.first..lig.range.last + 1)) {
         val elem = file.findElementAt(lineStart + lig.range.first)
 
@@ -510,52 +529,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private fun isMyLayer(layer: Int): Boolean {
       return layer == MY_LIGATURE_LAYER || layer == MY_LIGATURE_BACKGROUND_LAYER || layer == MY_SELECTION_LAYER
     }
-
-    private val baseLigatures = ("""
-
-  .= ..= .- := =:= == != === !== =/= <-< <<- <-- <- <-> -> --> ->> >-> <=< <<= <== <=> => ==> =!= =:=
-  =>> >=> >>= >>- >- <~> -< -<< =<< <~~ <~ ~~ ~> ~~> <<< << <= <> >= >> >>> {. {| [| <: :> |] |} .}
-  <||| <|| <| <|> |> ||> |||> <$ <$> $> <+ <+> +> <* <*> *> \\ \\\ \* /* */ /// // </ <!-- </> --> />
-  ;; :: ::: .. ... ..< !! ?? %% && <:< || ?. ?: ++ +++ -- --- ** *** ~= ~- www ff fi fl ffi ffl
-  -~ ~@ ^= ?= /= /== |= ||= #! ## ### #### #{ #[ ]# #( #? #_ #: #= #_( #{} =~ !~ 9x9 0xF 0o7 0b1
-  |- |-- -| --| |== =| ==| /==/ ==/ /=/ <~~> =>= =<= :>: :<: /\ \/ _|_ ||- :< >: ::=
-  <==== ==== ====> <====> <--- ---> <---> |--- ---| |=== ===| /=== ===/ <~~~ ~~~> <~~~>
-
-""").trim().split(Regex("""\s+"""))
-
-    private val patternSubstitutions = hashMapOf<String, String?>(
-      "####" to "#{4,}",
-      "<====" to "<={4,}",
-      "====" to "={4,}",
-      "====>" to "={4,}>",
-      "<====>" to "<={4,}>",
-      "<---" to "<-{3,}",
-      "--->" to "-{3,}>",
-      "<--->" to "<-{3,}>",
-      "|---" to "\\|-{3,}",
-      "---|" to "-{3,}\\|",
-      "|===" to "\\|={3,}",
-      "===|" to "={3,}\\|",
-      "/===" to "\\/={3,}",
-      "===/" to "={3,}\\/",
-      "<~~~" to "<~{3,}",
-      "~~~>" to "~{3,}>",
-      "<~~~>" to "<~{3,}>",
-      "0xF" to "0x[0-9a-fA-F]",
-      "0o7" to "0o[0-7]",
-      "0b1" to "(?<![0-9a-fA-FxX])0b[01]",
-      "9x9" to "\\dx\\d"
-    )
-
-    private val connectionTweaks = hashMapOf<String, Regex?>(
-      "-" to Regex("""[-<>|]+"""),
-      "=" to Regex("""[=<>|]+"""),
-      "~" to Regex("""[~<>|]+""")
-    )
-
-    private val charsNeedingRegexEscape = Regex("""[-\[\]/{}()*+?.\\^$|]""")
-    private val disregarded = arrayOf<String>()
-    private val globalMatchLigatures: Regex
     private val DEBUG_GREEN = Color(0x009900)
     private val DEBUG_RED = Color(0xDD0000)
     private val currentEditors = HashMap<PsiFile, Editor>()
@@ -563,90 +536,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private val cursorHighlighters = HashMap<Editor, List<RangeHighlighter>>()
     private val syntaxHighlighters = HashMap<Editor, List<RangeHighlighter>>()
     private val highlightRechecks = ConcurrentHashMap<Editor, HighlightRecheck>()
-
-    init {
-      val sorted = baseLigatures.sortedWith(Comparator { a, b -> b.length - a.length })
-      val escaped = sorted.map { lig -> patternSubstitutions[lig] ?: generatePattern(lig) }
-      globalMatchLigatures = Regex(escaped.joinToString("|"))
-    }
-
-    private fun generatePattern(ligature: String): String {
-      val leadingSet = HashSet<String>()
-      val trailingSet = HashSet<String>()
-      val len = ligature.length
-
-      // Give triangles (◁, ▷) and diamonds (♢) formed using < and > higher priority.
-      if (Regex("""^[>|]""").containsMatchIn(ligature))
-        leadingSet.add("<")
-
-      if (Regex("""[|<]$""").containsMatchIn(ligature))
-        trailingSet.add(">")
-
-      for (other in disregarded) {
-        if (other.length <= len)
-          break
-
-        var index = 0
-
-        while ({ index = other.indexOf(ligature, index); index }() >= 0) {
-          if (index > 0)
-            leadingSet.add(other[index - 1].toString())
-
-          if (index + len < other.length)
-            trailingSet.add(other[index + len].toString())
-
-          ++index
-        }
-      }
-
-      // Handle ligatures which are supposed to blend with combinatory arrow ligatures
-      connectionTweaks.forEach { (key, pattern) ->
-        if (ligature.startsWith(key) && pattern!!.matches(ligature))
-          leadingSet.add(key)
-
-        if (ligature.endsWith(key) && pattern!!.matches(ligature))
-          trailingSet.add(key)
-      }
-
-      // Handle ligatures which are supposed to be connective with other ligatures
-
-      val leading = createLeadingOrTrailingClass(leadingSet)
-      val trailing = createLeadingOrTrailingClass(trailingSet)
-      var pattern = ""
-
-      if (!leading.isNullOrEmpty()) // Create negative lookbehind, so this ligature isn't matched if preceded by these characters.
-        pattern += "(?<!$leading)"
-
-      pattern += escapeForRegex(ligature)
-
-      if (!trailing.isNullOrEmpty()) // Create negative lookahead, so this ligature isn't matched if followed by these characters.
-        pattern += "(?!$trailing)"
-
-      return pattern
-    }
-
-    private fun createLeadingOrTrailingClass(set: MutableSet<String>): String? {
-      if (set.isEmpty())
-        return ""
-      else if (set.size == 1)
-        return escapeForRegex(set.elementAt(0))
-
-      var klass = "["
-
-      // If present, dash (`-`) must go first, in case it's the start of a [] class pattern
-      if (set.contains("-")) {
-        klass += "-"
-        set.remove("-")
-      }
-
-      set.forEach { c -> klass += escapeForRegex(c) }
-
-      return "$klass]"
-    }
-
-    private fun escapeForRegex(s: String): String {
-      return s.replace(charsNeedingRegexEscape) { m -> "\\" + m.value }
-    }
 
     private val cachedColors: MutableMap<Color, Array<Color?>> = HashMap()
     private val noColors = arrayOf<Color?>(null, null)

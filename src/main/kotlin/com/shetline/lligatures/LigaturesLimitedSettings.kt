@@ -31,6 +31,12 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
       settingsState.json = defaultJson
       settingsState.config = parseJson(settingsState.json)
     }
+
+    val sorted = baseLigatures.sortedWith(Comparator { a, b -> b.length - a.length })
+    val escaped = sorted.map { lig -> patternSubstitutions[lig] ?: generatePattern(lig,
+      settingsState.config!!.disregarded) }
+
+    settingsState.globalMatchLigatures = Regex(escaped.joinToString("|"))
   }
 
   class SettingsState {
@@ -38,6 +44,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
     var debug = false
     var json = defaultJson
     @Transient var config: GlobalConfig? = null
+    @Transient var globalMatchLigatures: Regex? = null
   }
 
   open class ContextConfig (
@@ -50,7 +57,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
     var contexts: MutableSet<ElementCategory> = mutableSetOf(),
     var fullOnOrOff: Boolean? = null,
     var inherit: String? = null,
-    var ligaturesByContext: MutableMap<String, ContextConfig> = mutableMapOf()
+    var ligaturesByContext: MutableMap<ElementCategory, ContextConfig> = mutableMapOf()
   ) : ContextConfig()
 
   class GlobalConfig (
@@ -72,6 +79,116 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
   <==== ==== ====> <====> <--- ---> <---> |--- ---| |=== ===| /=== ===/ <~~~ ~~~> <~~~>
 
 """).trim().split(Regex("""\s+"""))
+
+  private val patternSubstitutions = hashMapOf<String, String?>(
+    "####" to "#{4,}",
+    "<====" to "<={4,}",
+    "====" to "={4,}",
+    "====>" to "={4,}>",
+    "<====>" to "<={4,}>",
+    "<---" to "<-{3,}",
+    "--->" to "-{3,}>",
+    "<--->" to "<-{3,}>",
+    "|---" to "\\|-{3,}",
+    "---|" to "-{3,}\\|",
+    "|===" to "\\|={3,}",
+    "===|" to "={3,}\\|",
+    "/===" to "\\/={3,}",
+    "===/" to "={3,}\\/",
+    "<~~~" to "<~{3,}",
+    "~~~>" to "~{3,}>",
+    "<~~~>" to "<~{3,}>",
+    "0xF" to "0x[0-9a-fA-F]",
+    "0o7" to "0o[0-7]",
+    "0b1" to "(?<![0-9a-fA-FxX])0b[01]",
+    "9x9" to "\\dx\\d"
+  )
+
+  private val connectionTweaks = hashMapOf<String, Regex?>(
+    "-" to Regex("""[-<>|]+"""),
+    "=" to Regex("""[=<>|]+"""),
+    "~" to Regex("""[~<>|]+""")
+  )
+
+  private val charsNeedingRegexEscape = Regex("""[-\[\]/{}()*+?.\\^$|]""")
+
+  private fun generatePattern(ligature: String, disregarded: Set<String>): String {
+    val leadingSet = HashSet<String>()
+    val trailingSet = HashSet<String>()
+    val len = ligature.length
+
+    // Give triangles (◁, ▷) and diamonds (♢) formed using < and > higher priority.
+    if (Regex("""^[>|]""").containsMatchIn(ligature))
+      leadingSet.add("<")
+
+    if (Regex("""[|<]$""").containsMatchIn(ligature))
+      trailingSet.add(">")
+
+    for (other in disregarded) {
+      if (other.length <= len)
+        break
+
+      var index = 0
+
+      while ({ index = other.indexOf(ligature, index); index }() >= 0) {
+        if (index > 0)
+          leadingSet.add(other[index - 1].toString())
+
+        if (index + len < other.length)
+          trailingSet.add(other[index + len].toString())
+
+        ++index
+      }
+    }
+
+    // Handle ligatures which are supposed to blend with combinatory arrow ligatures
+    connectionTweaks.forEach { (key, pattern) ->
+      if (ligature.startsWith(key) && pattern!!.matches(ligature))
+        leadingSet.add(key)
+
+      if (ligature.endsWith(key) && pattern!!.matches(ligature))
+        trailingSet.add(key)
+    }
+
+    // Handle ligatures which are supposed to be connective with other ligatures
+
+    val leading = createLeadingOrTrailingClass(leadingSet)
+    val trailing = createLeadingOrTrailingClass(trailingSet)
+    var pattern = ""
+
+    if (!leading.isNullOrEmpty()) // Create negative lookbehind, so this ligature isn't matched if preceded by these characters.
+      pattern += "(?<!$leading)"
+
+    pattern += escapeForRegex(ligature)
+
+    if (!trailing.isNullOrEmpty()) // Create negative lookahead, so this ligature isn't matched if followed by these characters.
+      pattern += "(?!$trailing)"
+
+    return pattern
+  }
+
+  private fun createLeadingOrTrailingClass(set: MutableSet<String>): String? {
+    if (set.isEmpty())
+      return ""
+    else if (set.size == 1)
+      return escapeForRegex(set.elementAt(0))
+
+    var klass = "["
+
+    // If present, dash (`-`) must go first, in case it's the start of a [] class pattern
+    if (set.contains("-")) {
+      klass += "-"
+      set.remove("-")
+    }
+
+    set.forEach { c -> klass += escapeForRegex(c) }
+
+    return "$klass]"
+  }
+
+  private fun escapeForRegex(s: String): String {
+    return s.replace(charsNeedingRegexEscape) { m -> "\\" + m.value }
+  }
 
   const val defaultJson = """{
   "contexts": "operator punctuation comment_marker",
@@ -212,7 +329,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
         }
       }
 
-      private fun deserializeLigaturesByContext(elem: JsonElement, contexts: MutableMap<String, ContextConfig>,
+      private fun deserializeLigaturesByContext(elem: JsonElement, contexts: MutableMap<ElementCategory, ContextConfig>,
           baseConfig: LanguageConfig) {
         if (!elem.isJsonObject)
           throw JsonParseException("JSON object is expected for ligaturesByContext")
@@ -253,8 +370,16 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
             }
           }
 
-          for (contextName in getStringArray(key, true))
-            contexts[contextName] = contextConfig
+          for (contextName in getStringArray(key, true)) {
+            try {
+              val category = ElementCategory.valueOf(contextName.toUpperCase())
+
+              contexts[category] = contextConfig
+            }
+            catch (e: Exception) {
+              throw JsonParseException("Invalid context name '$contextName'")
+            }
+          }
         }
       }
     }
