@@ -4,7 +4,6 @@ import com.intellij.codeHighlighting.*
 import com.intellij.codeInsight.daemon.impl.HighlightVisitor
 import com.intellij.codeInsight.daemon.impl.analysis.HighlightInfoHolder
 import com.intellij.ide.AppLifecycleListener
-import com.intellij.lang.Language
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.editor.Editor
@@ -83,7 +82,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     }
 
     val debug = settings.state!!.debug
-    val ligatures = settings.state!!.globalMatchLigatures
+    val language = file.language.toString().toLowerCase().replace(Regex("""^.*?:\s+"""), "")
+    val ligatures = settings.extState!!.globalMatchLigatures!!
     var index = 0
     var match: MatchResult? = null
     val syntaxHighlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(file.language, file.project, file.virtualFile)
@@ -92,7 +92,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     var lastDebugHighlight: LigatureHighlight? = null
     var lastDebugCategory: ElementCategory? = null
 
-    while (index < text.length && { match = ligatures?.find(text, index); match }() != null) {
+    while (index < text.length && { match = ligatures.find(text, index); match }() != null) {
       val matchIndex = match!!.range.first
       val matchText = match!!.groupValues[0]
       val elem = file.findElementAt(matchIndex)
@@ -100,10 +100,11 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       if (elem != null && elem.language == file.language) {
         val category = ElementCategorizer.categoryFor(elem, matchText, matchIndex)
 
-        if (shouldSuppressLigature(elem, category, file.language, matchText, matchIndex)) {
+        if (shouldSuppressLigature(elem, category, language, matchText, matchIndex)) {
           val colors = getMatchingColors(DEBUG_RED)
+          val extra = extendedLength(file, text, elem, category, language, matchText, matchIndex)
 
-          for (i in matchText.indices) {
+          for (i in 0 until matchText.length + extra) {
             val phase = (matchIndex + i) % 2
             val foreground = if (debug) colors[phase] else null
 
@@ -133,7 +134,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     if (hIndex > 0 && hIndex < text.length - 1) {
       val extensionCandidate = text.substring(hIndex - 1, hIndex + 1)
-      match = ligatures?.find(text, index)
+      match = ligatures.find(text, index)
 
       if (match != null) {
         val elem = file.findElementAt(hIndex)
@@ -231,32 +232,69 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     }
   }
 
-  private fun shouldSuppressLigature(
-      elem: PsiElement, inCategory: ElementCategory?, baseLanguage: Language?,
-      matchText: String, matchIndex: Int
-  ): Boolean {
-    val language = baseLanguage.toString().toLowerCase()
+  private fun getMatchingConfiguration(elem: PsiElement, inCategory: ElementCategory?, baseLanguage: String,
+                                       matchText: String, matchIndex: Int
+  ): LigaturesLimitedSettings.ContextConfig? {
     val category = inCategory ?: ElementCategorizer.categoryFor(elem, matchText, matchIndex)
-    val globalConfig = settings.state!!.config!!
+    val globalConfig = settings.extState!!.config!!
     var langConfig: LigaturesLimitedSettings.LanguageConfig = globalConfig
 
-    if (globalConfig.languages.containsKey(language))
-      langConfig = globalConfig.languages[language]!!
+    if (globalConfig.languages.containsKey(baseLanguage))
+      langConfig = globalConfig.languages[baseLanguage]!!
 
-    if (langConfig.fullOnOrOff == true)
-      return false
-    else if (langConfig.fullOnOrOff == false)
+    if (langConfig.fullOnOrOff != null)
+      return langConfig
+
+    return if (langConfig.ligaturesByContext.containsKey(category))
+      langConfig.ligaturesByContext[category]!!
+    else if (!langConfig.contexts.contains(category))
+      null
+    else
+      langConfig
+  }
+
+  private fun extendedLength(file: PsiFile, text: String, elem: PsiElement, category: ElementCategory?,
+      baseLanguage: String, matchText: String, matchIndex: Int
+  ): Int {
+    val nextIndex = matchIndex + matchText.length
+
+    if (nextIndex < 2 || nextIndex >= text.length)
+      return 0
+
+    val nextElem = file.findElementAt(nextIndex) ?: return 0
+    val nextCategory = ElementCategorizer.categoryFor(nextElem, "", nextIndex)
+
+    if (nextCategory != category)
+      return 0
+
+    val config = getMatchingConfiguration(elem, category, baseLanguage, matchText, matchIndex)
+
+    if (config is LigaturesLimitedSettings.LanguageConfig && config.fullOnOrOff == false)
+      return 0
+
+    val matcher = if (config != null && (config as? LigaturesLimitedSettings.LanguageConfig)?.fullOnOrOff == true)
+      config.ligaturesMatch else settings.extState!!.globalMatchLigatures!!
+    val extendCandidate = text.substring(nextIndex - 2, nextIndex + 1)
+    val searchStart = if (extendCandidate == "==/") 0 else 1 // Special case, since =/ by itself isn't a known ligature.
+
+    return if (matcher.find(extendCandidate, searchStart) != null) 1 else 0
+  }
+
+  private fun shouldSuppressLigature(elem: PsiElement, inCategory: ElementCategory?, baseLanguage: String,
+      matchText: String, matchIndex: Int
+  ): Boolean {
+    val config = getMatchingConfiguration(elem, inCategory, baseLanguage, matchText, matchIndex)
+
+    if (config == null)
       return true
+    else if (config is LigaturesLimitedSettings.LanguageConfig) {
+      if (config.fullOnOrOff == true)
+        return false
+      else if (config.fullOnOrOff == false)
+        return true
+    }
 
-    var config: LigaturesLimitedSettings.ContextConfig = langConfig
-
-    if (langConfig.ligaturesByContext.containsKey(category))
-      config = langConfig.ligaturesByContext[category]!!
-
-    if (config.ligaturesListedAreEnabled)
-      return !config.ligatures.contains(matchText)
-
-    return config.ligatures.contains(matchText)
+    return config.ligatures.contains(matchText) == !config.ligaturesListedAreEnabled
   }
 
   override fun clone(): HighlightVisitor = LigaturesLimited()
@@ -318,7 +356,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       return
 
     val file = currentFiles[editor] ?: return
-    val ligatures = settings.state!!.globalMatchLigatures
+    val ligatures = settings.extState!!.globalMatchLigatures
     val lineStart = doc.getLineStartOffset(pos.line)
     val lineEnd = if (pos.line < doc.lineCount - 1) doc.getLineStartOffset(pos.line + 1) else doc.textLength
     val line = doc.getText(TextRange(lineStart, lineEnd)).trimEnd()

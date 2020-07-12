@@ -16,40 +16,54 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
   enum class CursorMode { OFF, CURSOR, LINE }
 
   private var settingsState: SettingsState = SettingsState()
+  private lateinit var extSettingsState: ExtSettingsState
+
+  init {
+    loadState(SettingsState())
+  }
 
   override fun getState(): SettingsState? {
     return settingsState
   }
 
+  val extState: ExtSettingsState? get() = extSettingsState
+
   override fun loadState(state: SettingsState) {
     settingsState = state
+    extSettingsState = ExtSettingsState(state)
 
     try {
-      settingsState.config = parseJson(settingsState.json)
+      extSettingsState.config = parseJson(settingsState.json)
     }
     catch (e: Exception) {
       settingsState.json = defaultJson
-      settingsState.config = parseJson(settingsState.json)
+      extSettingsState.config = parseJson(settingsState.json)
     }
 
-    val sorted = baseLigatures.sortedWith(Comparator { a, b -> b.length - a.length })
-    val escaped = sorted.map { lig -> patternSubstitutions[lig] ?: generatePattern(lig,
-      settingsState.config!!.disregarded) }
-
-    settingsState.globalMatchLigatures = Regex(escaped.joinToString("|"))
+    extSettingsState.globalMatchLigatures = ligaturesToRegex(extSettingsState.config!!.globalLigatures)
   }
 
-  class SettingsState {
+  open class SettingsState {
     var cursorMode = CursorMode.CURSOR
     var debug = false
     var json = defaultJson
-    @Transient var config: GlobalConfig? = null
-    @Transient var globalMatchLigatures: Regex? = null
+  }
+
+  class ExtSettingsState(state: SettingsState) : SettingsState() {
+    var config: GlobalConfig? = null
+    var globalMatchLigatures: Regex? = null
+
+    init {
+      cursorMode = state.cursorMode
+      debug = state.debug
+      json = state.json
+    }
   }
 
   open class ContextConfig (
     var debug: Boolean = false,
     var ligatures: MutableSet<String> = mutableSetOf(),
+    var ligaturesMatch: Regex = Regex("\\x00"),
     var ligaturesListedAreEnabled: Boolean = false
   )
 
@@ -111,6 +125,13 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
   )
 
   private val charsNeedingRegexEscape = Regex("""[-\[\]/{}()*+?.\\^$|]""")
+
+  private fun ligaturesToRegex(ligatures: Set<String>): Regex {
+    val sorted = ligatures.toList().sortedWith(Comparator { a, b -> b.length - a.length })
+    val escaped = sorted.map { lig -> patternSubstitutions[lig] ?: generatePattern(lig, ligatures.toSet()) }
+
+    return Regex(escaped.joinToString("|"))
+  }
 
   private fun generatePattern(ligature: String, disregarded: Set<String>): String {
     val leadingSet = HashSet<String>()
@@ -300,6 +321,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
                 language.contexts.addAll(parent.contexts)
                 language.debug = parent.debug
                 language.ligatures.addAll(parent.ligatures)
+                language.ligaturesMatch = ligaturesToRegex(language.ligatures)
                 language.ligaturesListedAreEnabled = parent.ligaturesListedAreEnabled
                 language.ligaturesByContext = parent.ligaturesByContext.toMutableMap()
 
@@ -346,6 +368,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
 
           contextConfig.debug = baseConfig.debug
           contextConfig.ligatures.addAll(baseConfig.ligatures)
+          contextConfig.ligaturesMatch = ligaturesToRegex(contextConfig.ligatures)
           contextConfig.ligaturesListedAreEnabled = baseConfig.ligaturesListedAreEnabled
 
           if (contextInfo0.isString) {

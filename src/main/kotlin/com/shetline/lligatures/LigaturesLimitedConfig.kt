@@ -37,7 +37,7 @@ class LigaturesLimitedConfig : Configurable, Disposable {
 
   override fun apply() {
     try {
-      println(parseJson(jsonConfig.text))
+      parseJson(jsonConfig.text)
     }
     catch (e: Exception) {
       throw ConfigurationException(e.message)
@@ -46,6 +46,9 @@ class LigaturesLimitedConfig : Configurable, Disposable {
     configState?.cursorMode = cursorMode.selectedItem as CursorMode
     configState?.debug = debug.isSelected
     configState?.json = jsonTrim(jsonConfig.text)!!
+
+    if (configState != null)
+      LigaturesLimitedSettings.instance.loadState(configState!!)
 
     ProjectManager.getInstance().openProjects.forEach()
       { project -> DaemonCodeAnalyzer.getInstance(project).restart() }
