@@ -46,6 +46,7 @@ class Json5ToJson {
         parts.add(j5.substring(index))
 
       for (i in 0 until parts.size step 2) {
+        @Suppress("RegExpRedundantEscape") // Can't win here. Either get an inspection warning, or a run-time warning. I'd rather not have the runtime warning.
         parts[i] = parts[i]
           // Remove comments
           .replace(Regex("""\s*//.*$""", RegexOption.MULTILINE), "")
@@ -53,7 +54,7 @@ class Json5ToJson {
           // Quote unquoted identifiers -- regex just good enough for needed identifiers, not all valid identifiers
           .replace(Regex("""\b([a-zA-Z_]+)(?=\s*:)"""), "\"$1\"")
           // Clean up trailing commas
-          .replace(Regex(""",(?=\s*[]}])"""), "")
+          .replace(Regex(""",(?=\s*[\]}])"""), "")
       }
 
       return parts.joinToString("")

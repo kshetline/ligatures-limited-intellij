@@ -1,7 +1,9 @@
 @file:Suppress("SpellCheckingInspection")
 package com.shetline.lligatures
 
+import com.intellij.lang.Language
 import com.intellij.psi.PsiElement
+import com.intellij.psi.util.elementType
 
 enum class ElementCategory {
   ATTRIBUTE_NAME,
@@ -29,11 +31,12 @@ class ElementCategorizer {
 
     fun categoryFor(element: PsiElement, matchText: String, matchIndex: Int, count: Int = 0): ElementCategory {
       // Replace underscores with tildes so they act as regex word boundaries.
-      val type = element.node.elementType.toString().replace('_', '~').toLowerCase()
-        .replace(Regex(""".*:"""), "")
+      val type = element.elementType?.toString()?.replace(Regex("""[- _.]"""), "~")?.toLowerCase()
+        ?.replace(Regex(""".*:"""), "") ?: "unknown"
       var isWhitespace = false
 
       when {
+        element.language == Language.ANY -> return ElementCategory.TEXT
         Regex("""\b(string|escape~sequence)\b""").containsMatchIn(type) -> return ElementCategory.STRING
         Regex("""\bregexp\b""").containsMatchIn(type) -> return ElementCategory.REGEXP
         Regex("""\bkeyword\b""").containsMatchIn(type) -> return ElementCategory.KEYWORD
@@ -70,8 +73,8 @@ class ElementCategorizer {
         (operatorLike) ->  return ElementCategory.OPERATOR
       }
 
-      if (element.parent != null) {
-        when (element.parent.node.elementType.toString().replace('_', '~').toLowerCase()) {
+      if (element.parent.elementType != null) {
+        when (element.parent.elementType.toString().replace('_', '~').toLowerCase()) {
           "xml~doctype" ->
             return when {
               matchText.startsWith("<!") -> ElementCategory.TAG

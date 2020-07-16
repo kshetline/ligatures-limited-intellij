@@ -486,7 +486,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     }
 
     if (color == null) {
-      val type = hintType ?: elem.elementType ?: elem.node.elementType
+      val type = hintType ?: elem.elementType
       val textAttrKeys = syntaxHighlighter?.getTokenHighlights(type)
       val textAttrs = if (textAttrKeys != null) getTextAttributes(colorsScheme, textAttrKeys) else null
 
