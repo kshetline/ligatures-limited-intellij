@@ -40,7 +40,7 @@ class ElementCategorizer {
         Regex("""\bwhite~space\b""").containsMatchIn(type) -> isWhitespace = true
         Regex("""\b(float|integer|numeric|number)\b""").containsMatchIn(type) -> return ElementCategory.NUMBER
         Regex("""\bconstant\b""").containsMatchIn(type) -> return ElementCategory.CONSTANT
-        Regex("""\btext\b""").containsMatchIn(type) -> return ElementCategory.TEXT
+        Regex("""\b(text|xml~data~characters)\b""").containsMatchIn(type) -> return ElementCategory.TEXT
         Regex("""\b(tag~start|tag~end|comma|lpar|rpar|lbrace|rbrace|semicolon|""" +
           """lbracket|rbracket)\b""").containsMatchIn(type) ||
           Regex("""['"`]""").matches(matchText) ||
