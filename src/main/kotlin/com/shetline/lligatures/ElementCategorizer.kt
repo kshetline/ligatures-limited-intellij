@@ -30,6 +30,7 @@ class ElementCategorizer {
     fun categoryFor(element: PsiElement, matchText: String, matchIndex: Int, count: Int = 0): ElementCategory {
       // Replace underscores with tildes so they act as regex word boundaries.
       val type = element.node.elementType.toString().replace('_', '~').toLowerCase()
+        .replace(Regex(""".*:"""), "")
       var isWhitespace = false
 
       when {
@@ -40,7 +41,7 @@ class ElementCategorizer {
         Regex("""\bwhite~space\b""").containsMatchIn(type) -> isWhitespace = true
         Regex("""\b(float|integer|numeric|number)\b""").containsMatchIn(type) -> return ElementCategory.NUMBER
         Regex("""\bconstant\b""").containsMatchIn(type) -> return ElementCategory.CONSTANT
-        Regex("""\b(text|xml~data~characters)\b""").containsMatchIn(type) -> return ElementCategory.TEXT
+        Regex("""\b(text|xml~data~characters|code~fence~content)\b""").containsMatchIn(type) -> return ElementCategory.TEXT
         Regex("""\b(tag~start|tag~end|comma|lpar|rpar|lbrace|rbrace|semicolon|""" +
           """lbracket|rbracket)\b""").containsMatchIn(type) ||
           Regex("""['"`]""").matches(matchText) ||

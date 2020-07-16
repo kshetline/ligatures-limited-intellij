@@ -30,6 +30,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
+import com.intellij.psi.tree.IElementType
 import com.intellij.psi.util.elementType
 import com.intellij.util.xmlb.XmlSerializerUtil.copyBean
 import com.shetline.lligatures.LigaturesLimitedSettings.CursorMode
@@ -67,9 +68,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
   private fun searchForLigatures(file: PsiFile, holder: HighlightInfoHolder) {
     val text = file.text
-    val languageInfo = languageLookup[file.language.id.toLowerCase()]
-    val languageIndex = if (file.context != null) languageInfo?.index ?: 0 else 0
-    val indexColor = if (languageIndex > 0) Color(languageIndex, true) else null
+    val languageId = if (file.context != null) file.language.id.toLowerCase() else null
+    val languageInfo = if (languageId != null) languageLookup[languageId] else null
     val editor = currentEditors[file]
 
     if (languageInfo != null && languageInfo.syntaxHighlighter == null)
@@ -123,10 +123,11 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         val colors = getMatchingColors(DEBUG_RED)
         val extra = extendedLength(file, text, elem, category, elemLanguageId, matchText, matchIndex)
 
-        if (languageIndex > 0) {
+        if (languageId != null) {
           holder.add(HighlightInfo.newHighlightInfo(infoType)
             .range(elem, matchIndex, matchIndex + matchText.length + extra)
-            .textAttributes(TextAttributes(null, null, indexColor, EffectType.WAVE_UNDERSCORE, 0))
+            .textAttributes(TextAttributes(null, null,
+              ColorPayload(elem.elementType, languageId), EffectType.WAVE_UNDERSCORE, 0))
             .create())
           continue
         }
@@ -140,7 +141,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
         lastDebugHighlight = null
       }
-      else if (debug) {
+      else if (debug && languageId == null) {
         val extra = extendedLength(file, text, elem, category, elemLanguageId, matchText, matchIndex)
         val diff = if (lastDebugHighlight != null)
           lastDebugHighlight.index + lastDebugHighlight.span - lastDebugHighlight.index else 0
@@ -174,7 +175,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       }
     }
 
-    if (editor != null && languageIndex == 0) {
+    if (editor != null && languageId == null) {
       ApplicationManager.getApplication().invokeLater {
         val oldHighlighters = syntaxHighlighters[editor]
 
@@ -298,7 +299,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     if (config is LigaturesLimitedSettings.LanguageConfig && config.fullOnOrOff == false)
       return 0
 
-    val matcher = if (config != null && (config as? LigaturesLimitedSettings.LanguageConfig)?.fullOnOrOff == true)
+    val matcher = if (config != null && (config as? LigaturesLimitedSettings.LanguageConfig)?.fullOnOrOff != true)
       config.ligaturesMatch else settings.extState!!.globalMatchLigatures!!
     val extendCandidate = text.substring(nextIndex - 2, nextIndex + 1)
     val searchStart = if (extendCandidate == "==/") 0 else 1 // Special case, since =/ by itself isn't a known ligature.
@@ -393,11 +394,16 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val newHighlights = ArrayList<RangeHighlighter>()
 
     ligatures?.findAll(line)?.forEach { lig ->
-      if (mode == CursorMode.LINE || (mode == CursorMode.CURSOR && pos.column in lig.range.first..lig.range.last + 1)) {
-        val elem = file.findElementAt(lineStart + lig.range.first)
+      val elem = file.findElementAt(lineStart + lig.range.first)
 
-        if (elem != null) {
-          for (i in lig.range) {
+      if (elem != null) {
+        val category = ElementCategorizer.categoryFor(elem, lig.value, lig.range.first)
+        val extra = extendedLength(file, file.text, elem, category, getLanguageId(elem), lig.value,
+          lineStart + lig.range.first)
+
+        if (mode == CursorMode.LINE ||
+            (mode == CursorMode.CURSOR && pos.column in lig.range.first..lig.range.last + extra + 1)) {
+          for (i in lig.range.first..lig.range.last + extra) {
             val colors = if (!debug) getHighlightColors(elem, lig.value, lineStart + i, 1,
                 syntaxHighlighter, editor, editor.colorsScheme, defaultForeground)
               else getMatchingColors(DEBUG_RED)
@@ -435,6 +441,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     var minSpan = Int.MAX_VALUE
     val startIndex = findFirstIndex(highlighters, startOffset)
     var syntaxHighlighter = syntaxHighlighterIn
+    var hintType: IElementType? = null
 
     if (startIndex >= 0) {
       for (i in startIndex until highlighters.size) {
@@ -444,12 +451,12 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
           val specificColor = highlighter.textAttributes!!.foregroundColor
 
           if (specificColor == null) {
-            val languageIndex = getLanguageIndex(highlighter.textAttributes)
+            val (languageId, elemType) = getLanguageHints(highlighter.textAttributes)!!
 
-            if (languageIndex > 0) {
-              syntaxHighlighter = languageIndexLookup[languageIndex]?.syntaxHighlighter
-              continue
-            }
+            syntaxHighlighter = languageLookup[languageId]?.syntaxHighlighter
+            hintType = elemType
+
+            continue
           }
 
           val highlightSpan = highlighter.endOffset - highlighter.startOffset
@@ -482,7 +489,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     }
 
     if (color == null) {
-      val type = elem.elementType ?: elem.node.elementType
+      val type = hintType ?: elem.elementType ?: elem.node.elementType
       val textAttrKeys = syntaxHighlighter?.getTokenHighlights(type)
       val textAttrs = if (textAttrKeys != null) getTextAttributes(colorsScheme, textAttrKeys) else null
 
@@ -504,15 +511,18 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     })
 
     return highlighters.filter { h -> !isMyLayer(h.layer) &&
-        (h.textAttributes?.foregroundColor != null || getLanguageIndex(h.textAttributes) > 0) }
+        (h.textAttributes?.foregroundColor != null || getLanguageHints(h.textAttributes) != null) }
   }
 
-  private fun getLanguageIndex(textAttrs: TextAttributes?): Int {
+  data class LanguageHints(var languageId: String, var elemType: IElementType?)
+  private fun getLanguageHints(textAttrs: TextAttributes?): LanguageHints? {
     if (textAttrs == null || textAttrs.foregroundColor != null || textAttrs.effectColor == null ||
-        textAttrs.effectType != EffectType.WAVE_UNDERSCORE || textAttrs.effectColor.alpha > 0)
-      return 0
+        textAttrs.effectType != EffectType.WAVE_UNDERSCORE || textAttrs.effectColor !is ColorPayload)
+      return null
 
-    return textAttrs.effectColor.rgb
+    val color = textAttrs.effectColor as ColorPayload
+
+    return LanguageHints(color.language, color.elementType)
   }
 
   // Not quite close enough to any pre-defined binary search to avoid handling this as a special case
@@ -570,9 +580,9 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     var parent: PsiElement? = elem
 
     while ({ parent = parent?.parent; parent }() != null && parent !is PsiFile) {
-      if (elem.elementType.toString().endsWith(":CODE_FENCE")) {
-        if (elem.children.size > 1) {
-          val lang = elem.children[1]
+      if (parent!!.elementType.toString().endsWith(":CODE_FENCE")) {
+        if (parent!!.children.size > 1) {
+          val lang = parent!!.children[1]
 
           if (lang.elementType.toString().endsWith(":FENCE_LANG"))
             return lang.text.trim().toLowerCase()
@@ -626,6 +636,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     var index: Int,
     var syntaxHighlighter: SyntaxHighlighter? = null
   )
+
+  class ColorPayload(var elementType: IElementType?, var language: String): Color(0, true)
 
   companion object {
     private const val MY_LIGATURE_LAYER = HighlighterLayer.SELECTION + 33
