@@ -118,19 +118,17 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
       val category = ElementCategorizer.categoryFor(elem, matchText, matchIndex)
       val elemLanguageId = getLanguageId(elem)
+      val extra = extendedLength(file, text, elem, category, elemLanguageId, matchText, matchIndex)
 
-      if (shouldSuppressLigature(elem, category, elemLanguageId, matchText, matchIndex)) {
+      if (languageId != null) {
+        holder.add(HighlightInfo.newHighlightInfo(infoType)
+          .range(elem, matchIndex, matchIndex + matchText.length + extra)
+          .textAttributes(TextAttributes(null, null,
+            ColorPayload(elem.elementType, languageId), EffectType.WAVE_UNDERSCORE, 0))
+          .create())
+      }
+      else if (shouldSuppressLigature(elem, category, elemLanguageId, matchText, matchIndex)) {
         val colors = getMatchingColors(DEBUG_RED)
-        val extra = extendedLength(file, text, elem, category, elemLanguageId, matchText, matchIndex)
-
-        if (languageId != null) {
-          holder.add(HighlightInfo.newHighlightInfo(infoType)
-            .range(elem, matchIndex, matchIndex + matchText.length + extra)
-            .textAttributes(TextAttributes(null, null,
-              ColorPayload(elem.elementType, languageId), EffectType.WAVE_UNDERSCORE, 0))
-            .create())
-          continue
-        }
 
         for (i in 0 until matchText.length + extra) {
           val phase = (matchIndex + i) % 2
@@ -141,8 +139,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
         lastDebugHighlight = null
       }
-      else if (debug && languageId == null) {
-        val extra = extendedLength(file, text, elem, category, elemLanguageId, matchText, matchIndex)
+      else if (debug) {
         val diff = if (lastDebugHighlight != null)
           lastDebugHighlight.index + lastDebugHighlight.span - lastDebugHighlight.index else 0
 
