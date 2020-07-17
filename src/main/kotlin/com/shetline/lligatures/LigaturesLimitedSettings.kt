@@ -94,28 +94,29 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
 
 """).trim().split(Regex("""\s+"""))
 
+  @Suppress("RegExpRedundantEscape")
   private val patternSubstitutions = hashMapOf<String, String?>(
-    "####" to "#{4,}",
-    "<====" to "<={4,}",
-    "====" to "={4,}",
-    "====>" to "={4,}>",
-    "<====>" to "<={4,}>",
-    "<---" to "<-{3,}",
-    "--->" to "-{3,}>",
-    "<--->" to "<-{3,}>",
-    "|---" to "\\|-{3,}",
-    "---|" to "-{3,}\\|",
-    "|===" to "\\|={3,}",
-    "===|" to "={3,}\\|",
-    "/===" to "\\/={3,}",
-    "===/" to "={3,}\\/",
-    "<~~~" to "<~{3,}",
-    "~~~>" to "~{3,}>",
-    "<~~~>" to "<~{3,}>",
-    "0xF" to "0x[0-9a-fA-F]",
-    "0o7" to "0o[0-7]",
-    "0b1" to "(?<![0-9a-fA-FxX])0b[01]",
-    "9x9" to "\\dx\\d"
+    "####"   to /* language=regexp */ "#{4,}",
+    "<===="  to /* language=regexp */ "<={4,}",
+    "===="   to /* language=regexp */ "={4,}",
+    "====>"  to /* language=regexp */ "={4,}>",
+    "<====>" to /* language=regexp */ "<={4,}>",
+    "<---"   to /* language=regexp */ "<-{3,}",
+    "--->"   to /* language=regexp */ "-{3,}>",
+    "<--->"  to /* language=regexp */ "<-{3,}>",
+    "|---"   to /* language=regexp */ "\\|-{3,}",
+    "---|"   to /* language=regexp */ "-{3,}\\|",
+    "|==="   to /* language=regexp */ "\\|={3,}",
+    "===|"   to /* language=regexp */ "={3,}\\|",
+    "/==="   to /* language=regexp */ "\\/={3,}",
+    "===/"   to /* language=regexp */ "={3,}\\/",
+    "<~~~"   to /* language=regexp */ "<~{3,}",
+    "~~~>"   to /* language=regexp */ "~{3,}>",
+    "<~~~>"  to /* language=regexp */ "<~{3,}>",
+    "0xF"    to /* language=regexp */ "0x[0-9a-fA-F]",
+    "0o7"    to /* language=regexp */ "0o[0-7]",
+    "0b1"    to /* language=regexp */ "(?<![0-9a-fA-FxX])0b[01]",
+    "9x9"    to /* language=regexp */ "\\dx\\d"
   )
 
   private val connectionTweaks = hashMapOf<String, Regex?>(
