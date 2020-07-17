@@ -2,7 +2,7 @@
 
 ## Code ligatures _only where you want them_, not where you don’t
 
-> Please note: This first release is almost certain to have a few lurking bugs! Please don’t be shy about reporting bugs back to me. The most likely bugs will involve handling of ligatures in programming languages I myself don’t commonly use.
+> Note: This early release is almost certain to have a few lurking bugs. Please don’t be shy about reporting bugs back to me. The most likely bugs will involve handling of ligatures in programming languages I don’t commonly use myself.
 
 I enjoy using ligature fonts for coding so that symbols like arrows (<img src="https://shetline.com/readme/ligatures-limited-ij/v0.0.1/fat_arrow_nolig.png" width="16" height="14" align="absmiddle" style="display: inline-block; position: relative; top: -0.075em" alt="fat arrow no ligature">) look like arrows (<img src="https://shetline.com/readme/ligatures-limited-ij/v0.0.1/fat_arrow.png" width="17" height="14" align="absmiddle" style="display: inline-block; position: relative; top: -0.075em" alt="fat arrow ligature">) and does-not-equal signs (<img src="https://shetline.com/readme/ligatures-limited-ij/v0.0.1/not_equal_nolig.png" width="17" height="14" align="absmiddle" style="display: inline-block; position: relative; top: -0.075em" alt="not-equal no ligature">) look like the real thing from math class (<img src="https://shetline.com/readme/ligatures-limited-ij/v0.0.1/not_equal.png" width="17" height="14" align="absmiddle" style="display: inline-block; position: relative; top: -0.075em" alt="not-equal ligature">). The problem is that, even with the contextual smarts built into ligature fonts like Fira Code, ligatures have a knack of popping up where you don’t want them.
 

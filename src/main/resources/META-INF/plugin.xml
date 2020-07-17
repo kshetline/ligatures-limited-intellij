@@ -4,7 +4,10 @@
   <vendor email="kerry@shetline.com" url="http://github.com/kshetline/ligatures-limited-idea">Kerry Shetline</vendor>
 
   <description><![CDATA[
-    Code ligatures <i>only where you want them</i>, not where you don't
+    Code ligatures <i>only where you want them</i>, not where you don't.<br>
+    <br>
+    <a href="https://github.com/kshetline/ligatures-limited-intellij/blob/master/README.md">README page
+    for <i>Ligatures Limited</i>, with full documentation.
     ]]></description>
 
   <depends>com.intellij.modules.lang</depends>
