@@ -211,6 +211,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
     return s.replace(charsNeedingRegexEscape) { m -> "\\" + m.value }
   }
 
+  // language=json5
   const val defaultJson = """{
   "contexts": "operator punctuation comment_marker",
   "disregarded": "ff fi fl ffi ffl", // These ligatures will neither be actively enabled nor suppressed
@@ -231,13 +232,14 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
       get() = ServiceManager.getService(LigaturesLimitedSettings::class.java)
 
     fun parseJson(json5: String): GlobalConfig {
-      return gson.create().fromJson<GlobalConfig>(json5toJson(json5), GlobalConfig::class.java)
+      return gson.create().fromJson(json5toJson(json5), GlobalConfig::class.java)
     }
 
     private class MyDeserializer : JsonDeserializer<GlobalConfig> {
       private val globalAddBacks = mutableSetOf<String>()
 
       override fun deserialize(elem: JsonElement?, type: Type?, context: JsonDeserializationContext?): GlobalConfig {
+        globalAddBacks.clear()
         return deserializeAux(GlobalConfig(), "configuration", elem)
       }
 
@@ -262,7 +264,8 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
                 throw JsonParseException("JSON boolean expected for 'debug'")
               else
                 child.asBoolean
-            "disregarded" -> if (result is GlobalConfig) result.disregarded.addAll(getStringArray(child, key, false))
+            "disregarded" -> if (result is GlobalConfig) result.disregarded =
+              getStringArray(child, key, false).toMutableSet()
             "inherit" -> result.inherit = if (child.isString) child.asString else
               throw JsonParseException("JSON string expected for 'inherit'")
             "languages" -> languages = if (child.isJsonObject) child else
@@ -282,6 +285,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
           deserializeLigaturesByContext(ligaturesByContext, result.ligaturesByContext, result)
 
         if (result is GlobalConfig) {
+          result.ligaturesMatch = ligaturesToRegex(result.ligatures)
           result.globalLigatures.addAll(baseLigatures)
           result.globalLigatures.removeAll(result.disregarded)
           result.globalLigatures.addAll(globalAddBacks)

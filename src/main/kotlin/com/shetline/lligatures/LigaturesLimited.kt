@@ -449,9 +449,18 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
           if (specificColor == null) {
             val (languageId, elemType) = getLanguageHints(highlighter.textAttributes)!!
+            val languageInfo = languageLookup[languageId]
 
-            syntaxHighlighter = languageLookup[languageId]?.syntaxHighlighter
             hintType = elemType
+            syntaxHighlighter = languageInfo?.syntaxHighlighter
+
+            if (syntaxHighlighter == null && languageInfo != null && editor != null) {
+              val file = currentFiles[editor]
+
+              if (file != null)
+                languageInfo.syntaxHighlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(languageInfo.language,
+                  file.project, file.virtualFile)
+              }
 
             continue
           }
