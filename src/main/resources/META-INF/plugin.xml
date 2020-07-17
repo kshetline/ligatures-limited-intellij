@@ -1,0 +1,29 @@
+<idea-plugin>
+  <id>com.shetline.ligatures-limited</id>
+  <name>Ligatures Limited</name>
+  <vendor email="kerry@shetline.com" url="http://github.com/kshetline/ligatures-limited-idea">Kerry Shetline</vendor>
+
+  <description><![CDATA[
+    Code ligatures <i>only where you want them</i>, not where you don't
+    ]]></description>
+
+  <depends>com.intellij.modules.lang</depends>
+  <depends>com.intellij.modules.platform</depends>
+
+  <applicationListeners>
+    <listener class="com.shetline.lligatures.LigaturesLimited" topic="com.intellij.ide.AppLifecycleListener"/>
+  </applicationListeners>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <applicationConfigurable instance="com.shetline.lligatures.LigaturesLimitedConfig"
+                             groupId="editor" id="com.shetline.lligatures.LigaturesLimited"
+                             displayName="Ligatures Limited"/>
+    <applicationService serviceImplementation="com.shetline.lligatures.LigaturesLimited"/>
+    <applicationService serviceImplementation="com.shetline.lligatures.LigaturesLimitedSettings"/>
+    <highlightVisitor implementation="com.shetline.lligatures.LigaturesLimited"/>
+    <highlightingPassFactory implementation="com.shetline.lligatures.LigaturesLimited"/>
+  </extensions>
+
+  <actions>
+  </actions>
+</idea-plugin>
