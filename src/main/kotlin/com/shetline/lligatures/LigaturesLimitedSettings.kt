@@ -219,7 +219,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
   "languages": {
     "markdown": true // All ligatures will be enabled in all contexts for Markdown
   },
-  "ligatures": "- 0xF 0o7 0b1 9x9", // These ligatures are suppressed
+  "ligatures": "- 0xF 0o7 0b1 9x9 www", // These ligatures are suppressed
   "ligaturesByContext": {
     "number": "+ 0xF 0o7 0b1"
   }
@@ -319,7 +319,8 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
 
             if (child.isJsonObject) {
               val inheritance = (child as JsonObject)["inherit"]
-              val parent = if (inheritance?.isString == true) languages[inheritance.asString] else baseConfig
+              val parent = if (inheritance?.isString == true) languages[inheritance.asString.toLowerCase()]
+                else baseConfig
 
               if (parent != null) {
                 resolved.add(key)
@@ -343,7 +344,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
             }
 
             for (languageName in getStringArray(key, true))
-              languages[languageName] = language
+              languages[languageName.toLowerCase()] = language
           }
 
           if (pending == 0)

@@ -68,7 +68,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
   private fun searchForLigatures(file: PsiFile, holder: HighlightInfoHolder) {
     val text = file.text
-    val languageId = if (file.context != null) file.language.id.toLowerCase() else null
+    val languageId = if (file.context != null) file.language.idLc else null
     val languageInfo = if (languageId != null) languageLookup[languageId] else null
     val editor = currentEditors[file]
 
@@ -598,7 +598,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       }
     }
 
-    return elem.language.id.toLowerCase()
+    return elem.language.idLc
   }
 
   class HighlightingPass(file: PsiFile, editor: Editor) :
@@ -674,7 +674,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     init {
       for (language in LanguageUtil.getFileLanguages()) {
         val li = LanguageInfo(language, ++nextLanguageId)
-        val id = language.id.toLowerCase()
+        val id = language.idLc
 
         languageLookup[id] = li
         languageIndexLookup[nextLanguageId] = li
@@ -696,5 +696,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
       return cachedColors[color]!!
     }
+
+    val Language.idLc get(): String = this.id.toLowerCase().replace(' ', '_')
   }
 }
