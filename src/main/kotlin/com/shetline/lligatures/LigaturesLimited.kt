@@ -59,7 +59,13 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       file: PsiFile, updateWholeFile: Boolean, holder: HighlightInfoHolder, action: Runnable
   ): Boolean {
     action.run()
-    searchForLigatures(file, holder)
+
+    try {
+      searchForLigatures(file, holder)
+    }
+    catch (e: Exception) {
+      e.printStackTrace()
+    }
 
     return true
   }

@@ -19,7 +19,7 @@ import java.awt.event.KeyEvent
 import javax.swing.JComponent
 import javax.swing.KeyStroke
 
-class JsonEditor(project: Project, value: String? = ""):
+class Json5Editor(project: Project, value: String? = ""):
     LanguageTextField(Json5Language.INSTANCE, project, value ?: "") {
   init {
     val scheme = EditorColorsManager.getInstance().globalScheme
