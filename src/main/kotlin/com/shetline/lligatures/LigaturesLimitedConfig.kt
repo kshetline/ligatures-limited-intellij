@@ -6,7 +6,7 @@ import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.options.ConfigurationException
 import com.intellij.openapi.project.ProjectManager
 import com.intellij.ui.LanguageTextField
-import com.shetline.json.JsonEditor
+import com.shetline.json.Json5Editor
 import com.shetline.lligatures.LigaturesLimitedSettings.Companion.parseJson
 import com.shetline.lligatures.LigaturesLimitedSettings.CursorMode
 import com.shetline.lligatures.LigaturesLimitedSettings.SettingsState
@@ -63,7 +63,7 @@ class LigaturesLimitedConfig : Configurable, Disposable {
     val projects = projectManager.openProjects
     val project = if (projects.isNotEmpty()) projects[0] else projectManager.defaultProject
     val parent = jsonConfig.parent
-    val newJsonConfig = JsonEditor(project, configState?.json)
+    val newJsonConfig = Json5Editor(project, configState?.json)
 
     newJsonConfig.minimumSize = jsonConfig.minimumSize
     newJsonConfig.preferredSize = jsonConfig.preferredSize
