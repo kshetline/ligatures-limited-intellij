@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.shetline"
-version = "0.0.1"
+version = "0.0.1-alpha"
 
 repositories {
   mavenCentral()
@@ -15,11 +15,11 @@ dependencies {
   implementation(kotlin("stdlib-jdk8"))
   implementation(kotlin("reflect"))
   implementation("com.google.code.gson:gson:2.8.6")
-  testCompile("junit", "junit", "4.12")
+  // testCompile("junit", "junit", "4.12")
 }
 
 intellij {
-  version = "IU-2020.1.2"
+  version = "IC-2020.1.2"
   updateSinceUntilBuild = false
 }
 
