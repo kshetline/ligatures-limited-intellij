@@ -38,6 +38,7 @@ class ElementCategorizer {
 
       when {
         element.language == Language.ANY -> return ElementCategory.TEXT
+        type == "xml~attribute~value~token" -> return ElementCategory.ATTRIBUTE_VALUE
         Regex("""\b(string|escape~sequence)\b""").containsMatchIn(type) -> return ElementCategory.STRING
         Regex("""\bregexp\b""").containsMatchIn(type) -> return ElementCategory.REGEXP
         Regex("""\bkeyword\b""").containsMatchIn(type) -> return ElementCategory.KEYWORD
@@ -55,7 +56,8 @@ class ElementCategorizer {
 
       val text = element.text
       val elementIndex = element.textOffset
-      val operatorLike = matchText.length < 8 && opRegex.matches(matchText)
+      val operatorLike = matchText.length < 8 && opRegex.matches(matchText) &&
+            !Regex("""\b(attribute|class|ident|identifier|literal|name|space|string|text|value)\b""").containsMatchIn(type)
       val commentLike = Regex("""\b(comment|shebang)\b""").containsMatchIn(type)
       val blockComment = commentLike && Regex("""\b(block~comment|c~style~comment)\b""").containsMatchIn(type)
 

@@ -119,7 +119,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       index = (matchIndex + matchText.length).coerceAtLeast(index + 1)
       ProgressManager.checkCanceled()
 
-      if (elem == null || elem.rootLanguage != file.rootLanguage)
+      if (elem == null)
         continue
 
       val category = ElementCategorizer.categoryFor(elem, matchText, matchIndex)
@@ -704,14 +704,5 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     }
 
     val Language.idLc get(): String = this.id.toLowerCase().replace(' ', '_')
-
-    val PsiElement.rootLanguage get(): Language {
-      var lang = this.language
-
-      while (lang.baseLanguage != null)
-        lang = lang.baseLanguage!!
-
-      return lang
-    }
   }
 }
