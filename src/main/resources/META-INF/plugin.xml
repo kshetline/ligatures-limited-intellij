@@ -2,6 +2,7 @@
   <id>com.shetline.ligatures-limited</id>
   <name>Ligatures Limited</name>
   <vendor email="kerry@shetline.com" url="http://github.com/kshetline/ligatures-limited-idea">Kerry Shetline</vendor>
+  <idea-version since-build="193.4932.9"/>
 
   <description><![CDATA[
     Code ligatures <i>only where you want them</i>, not where you don't.<br>

@@ -119,11 +119,11 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       index = (matchIndex + matchText.length).coerceAtLeast(index + 1)
       ProgressManager.checkCanceled()
 
-      if (elem == null || elem.rootLanguage != file.rootLanguage)
+      if (elem == null)
         continue
 
       val category = ElementCategorizer.categoryFor(elem, matchText, matchIndex)
-      val elemLanguageId = getLanguageId(elem)
+      val elemLanguageId = getLanguageId(elem, file)
       val extra = extendedLength(file, text, elem, category, elemLanguageId, matchText, matchIndex)
 
       if (languageId != null) {
@@ -401,7 +401,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
       if (elem != null) {
         val category = ElementCategorizer.categoryFor(elem, lig.value, lig.range.first)
-        val extra = extendedLength(file, file.text, elem, category, getLanguageId(elem), lig.value,
+        val extra = extendedLength(file, file.text, elem, category, getLanguageId(elem, file), lig.value,
           lineStart + lig.range.first)
 
         if (mode == CursorMode.LINE ||
@@ -522,7 +522,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       if (a.startOffset != b.startOffset) a.startOffset - b.startOffset else b.endOffset - a.endOffset
     })
 
-    return highlighters.filter { h -> !isMyLayer(h.layer) &&
+    return highlighters.filter { h -> !isMyLayer(h.layer) && h.layer < HighlighterLayer.HYPERLINK &&
         (h.textAttributes?.foregroundColor != null || getLanguageHints(h.textAttributes) != null) }
   }
 
@@ -607,6 +607,16 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     return elem.language.idLc
   }
 
+  private fun getLanguageId(elem: PsiElement, file: PsiFile): String {
+    var id = getLanguageId(elem)
+    val fileId = file.language.rootLanguage.idLc
+
+    if (fileId == id)
+      id = file.language.idLc
+
+    return id
+  }
+
   class HighlightingPass(file: PsiFile, editor: Editor) :
       TextEditorHighlightingPass(file.project, editor.document, false) {
     override fun doCollectInformation(progress: ProgressIndicator) {}
@@ -652,9 +662,9 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   class ColorPayload(var elementType: IElementType?, var language: String): Color(0, true)
 
   companion object {
-    private const val MY_LIGATURE_LAYER = HighlighterLayer.SELECTION + 33
-    private const val MY_LIGATURE_BACKGROUND_LAYER = HighlighterLayer.SELECTION - 33
-    private const val MY_SELECTION_LAYER = MY_LIGATURE_LAYER + 1
+    private const val MY_LIGATURE_BACKGROUND_LAYER = HighlighterLayer.HYPERLINK - 3
+    private const val MY_LIGATURE_LAYER = HighlighterLayer.HYPERLINK - 2
+    private const val MY_SELECTION_LAYER = HighlighterLayer.HYPERLINK - 1
 
     private const val HIGHLIGHT_RECHECK_DELAY = 1000L // milliseconds
     private const val MAX_HIGHLIGHT_RECHECK_COUNT = 10
@@ -705,8 +715,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     val Language.idLc get(): String = this.id.toLowerCase().replace(' ', '_')
 
-    val PsiElement.rootLanguage get(): Language {
-      var lang = this.language
+    val Language.rootLanguage get(): Language {
+      var lang = this
 
       while (lang.baseLanguage != null)
         lang = lang.baseLanguage!!
