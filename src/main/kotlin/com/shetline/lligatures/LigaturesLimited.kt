@@ -522,7 +522,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       if (a.startOffset != b.startOffset) a.startOffset - b.startOffset else b.endOffset - a.endOffset
     })
 
-    return highlighters.filter { h -> !isMyLayer(h.layer) &&
+    return highlighters.filter { h -> !isMyLayer(h.layer) && h.layer < HighlighterLayer.HYPERLINK &&
         (h.textAttributes?.foregroundColor != null || getLanguageHints(h.textAttributes) != null) }
   }
 
@@ -652,9 +652,9 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   class ColorPayload(var elementType: IElementType?, var language: String): Color(0, true)
 
   companion object {
-    private const val MY_LIGATURE_LAYER = HighlighterLayer.SELECTION + 33
-    private const val MY_LIGATURE_BACKGROUND_LAYER = HighlighterLayer.SELECTION - 33
-    private const val MY_SELECTION_LAYER = MY_LIGATURE_LAYER + 1
+    private const val MY_LIGATURE_BACKGROUND_LAYER = HighlighterLayer.HYPERLINK - 3
+    private const val MY_LIGATURE_LAYER = HighlighterLayer.HYPERLINK - 2
+    private const val MY_SELECTION_LAYER = HighlighterLayer.HYPERLINK - 1
 
     private const val HIGHLIGHT_RECHECK_DELAY = 1000L // milliseconds
     private const val MAX_HIGHLIGHT_RECHECK_COUNT = 10
