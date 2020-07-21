@@ -116,7 +116,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
     "0xF"    to /* language=regexp */ "0x[0-9a-fA-F]",
     "0o7"    to /* language=regexp */ "0o[0-7]",
     "0b1"    to /* language=regexp */ "(?<![0-9a-fA-FxX])0b[01]",
-    "9x9"    to /* language=regexp */ "\\dx\\d"
+    "9x9"    to /* language=regexp */ "\\dx[1-9]"
   )
 
   private val connectionTweaks = hashMapOf<String, Regex?>(
