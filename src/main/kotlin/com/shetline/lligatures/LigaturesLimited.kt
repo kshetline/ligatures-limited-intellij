@@ -123,7 +123,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         continue
 
       val category = ElementCategorizer.categoryFor(elem, matchText, matchIndex)
-      val elemLanguageId = getLanguageId(elem)
+      val elemLanguageId = getLanguageId(elem, file)
       val extra = extendedLength(file, text, elem, category, elemLanguageId, matchText, matchIndex)
 
       if (languageId != null) {
@@ -401,7 +401,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
       if (elem != null) {
         val category = ElementCategorizer.categoryFor(elem, lig.value, lig.range.first)
-        val extra = extendedLength(file, file.text, elem, category, getLanguageId(elem), lig.value,
+        val extra = extendedLength(file, file.text, elem, category, getLanguageId(elem, file), lig.value,
           lineStart + lig.range.first)
 
         if (mode == CursorMode.LINE ||
@@ -607,6 +607,16 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     return elem.language.idLc
   }
 
+  private fun getLanguageId(elem: PsiElement, file: PsiFile): String {
+    var id = getLanguageId(elem)
+    val fileId = file.language.rootLanguage.idLc
+
+    if (fileId == id)
+      id = file.language.idLc
+
+    return id
+  }
+
   class HighlightingPass(file: PsiFile, editor: Editor) :
       TextEditorHighlightingPass(file.project, editor.document, false) {
     override fun doCollectInformation(progress: ProgressIndicator) {}
@@ -704,5 +714,14 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     }
 
     val Language.idLc get(): String = this.id.toLowerCase().replace(' ', '_')
+
+    val Language.rootLanguage get(): Language {
+      var lang = this
+
+      while (lang.baseLanguage != null)
+        lang = lang.baseLanguage!!
+
+      return lang
+    }
   }
 }
