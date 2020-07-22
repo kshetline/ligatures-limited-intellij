@@ -6,6 +6,8 @@ import com.intellij.openapi.components.ServiceManager
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.shetline.json.Json5ToJson.Companion.json5toJson
+import com.shetline.lligatures.LigaturesLimited.Companion.hasLanguage
+import com.shetline.lligatures.LigaturesLimited.Companion.normalizeLanguageId
 import java.lang.reflect.Type
 
 @State(
@@ -116,7 +118,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
     "0xF"    to /* language=regexp */ "0x[0-9a-fA-F]",
     "0o7"    to /* language=regexp */ "0o[0-7]",
     "0b1"    to /* language=regexp */ "(?<![0-9a-fA-FxX])0b[01]",
-    "9x9"    to /* language=regexp */ "\\dx[1-9]"
+    "9x9"    to /* language=regexp */ "(?:[1-9]|\\d{2,})x[1-9]"
   )
 
   private val connectionTweaks = hashMapOf<String, Regex?>(
@@ -343,8 +345,12 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
               language.fullOnOrOff = child.asBoolean
             }
 
-            for (languageName in getStringArray(key, true))
-              languages[languageName.toLowerCase()] = language
+            for (languageName in getStringArray(key, true)) {
+              if (!hasLanguage(normalizeLanguageId(languageName)))
+                throw JsonParseException("Invalid language ID '$languageName'")
+
+              languages[normalizeLanguageId(languageName, true)] = language
+            }
           }
 
           if (pending == 0)
@@ -374,7 +380,6 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
 
           contextConfig.debug = baseConfig.debug
           contextConfig.ligatures.addAll(baseConfig.ligatures)
-          contextConfig.ligaturesMatch = ligaturesToRegex(contextConfig.ligatures)
           contextConfig.ligaturesListedAreEnabled = baseConfig.ligaturesListedAreEnabled
 
           if (contextInfo0.isString) {
@@ -398,6 +403,8 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
               }
             }
           }
+
+          contextConfig.ligaturesMatch = ligaturesToRegex(contextConfig.ligatures)
 
           for (contextName in getStringArray(key, true)) {
             try {

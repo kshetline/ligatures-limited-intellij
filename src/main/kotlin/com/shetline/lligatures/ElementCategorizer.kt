@@ -4,7 +4,7 @@ package com.shetline.lligatures
 import com.intellij.lang.Language
 import com.intellij.psi.PsiElement
 import com.intellij.psi.util.elementType
-import com.shetline.lligatures.LigaturesLimited.Companion.idLc
+import com.shetline.lligatures.LigaturesLimited.Companion.idNormalized
 
 enum class ElementCategory {
   ATTRIBUTE_NAME,
@@ -50,7 +50,7 @@ class ElementCategorizer {
         Regex("""\b(tag~start|tag~end|comma|lpar|rpar|lbrace|rbrace|semicolon|""" +
           """lbracket|rbracket)\b""").containsMatchIn(type) ||
           Regex("""['"`]""").matches(matchText) ||
-          element.language.idLc === "xml" && Regex("""[</>]{1,2}""").matches(matchText)
+          element.language.idNormalized === "xml" && Regex("""[</>]{1,2}""").matches(matchText)
             -> return ElementCategory.PUNCTUATION
       }
 
@@ -72,6 +72,7 @@ class ElementCategorizer {
       }
 
       when {
+        (blockComment) -> return ElementCategory.BLOCK_COMMENT
         (commentLike) -> return ElementCategory.LINE_COMMENT
         (operatorLike) ->  return ElementCategory.OPERATOR
       }
