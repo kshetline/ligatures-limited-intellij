@@ -686,6 +686,10 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     private val languageLookup = mutableMapOf<String, LanguageInfo>()
     private val languageIndexLookup = mutableMapOf<Int, LanguageInfo>()
+    private val cannedLanguageList = """
+      asp, css, dtd, editorconfig, genericsql, gitexclude, gitignore, html, java, javascript, json, json5, jsp,
+      jspx, jsregexp, kotlin, less, manifest, markdown, mysql, properties, regexp, sass, scss, shell_script, sql,
+      sqlite, svg, text, typescript, typescript_jsx, xhtml, xml, yaml""".trim().split(Regex("""\s*,\s*""")).toSet()
 
     init {
       for (language in LanguageUtil.getFileLanguages()) {
@@ -697,7 +701,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       }
     }
 
-    fun hasLanguage(idNormalized: String) = languageLookup.containsKey(idNormalized)
+    fun hasLanguage(idNormalized: String) =
+      cannedLanguageList.contains(idNormalized) || languageLookup.containsKey(idNormalized)
 
     private fun getMatchingColors(color: Color?): Array<Color?> {
       if (color == null)
