@@ -74,7 +74,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
   private fun searchForLigatures(file: PsiFile, holder: HighlightInfoHolder) {
     val text = file.text
-    val languageId = if (file.context != null) file.language.idLc else null
+    val languageId = if (file.context != null) file.language.idNormalized else null
     val languageInfo = if (languageId != null) languageLookup[languageId] else null
     val editor = currentEditors[file]
 
@@ -324,7 +324,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         return true
     }
 
-    return config.ligatures.contains(matchText) == !config.ligaturesListedAreEnabled
+    return config.ligaturesMatch.matches(matchText) == !config.ligaturesListedAreEnabled
   }
 
   override fun clone(): HighlightVisitor = LigaturesLimited()
@@ -604,15 +604,15 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       }
     }
 
-    return elem.language.idLc
+    return elem.language.idNormalized
   }
 
   private fun getLanguageId(elem: PsiElement, file: PsiFile): String {
     var id = getLanguageId(elem)
-    val fileId = file.language.rootLanguage.idLc
+    val fileId = file.language.rootLanguage.idNormalized
 
     if (fileId == id)
-      id = file.language.idLc
+      id = file.language.idNormalized
 
     return id
   }
@@ -686,6 +686,10 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     private val languageLookup = mutableMapOf<String, LanguageInfo>()
     private val languageIndexLookup = mutableMapOf<Int, LanguageInfo>()
+    private val cannedLanguageList = """
+      asp, css, dtd, editorconfig, genericsql, gitexclude, gitignore, html, java, javascript, json, json5, jsp,
+      jspx, jsregexp, kotlin, less, manifest, markdown, mysql, properties, regexp, sass, scss, shell_script, sql,
+      sqlite, svg, text, typescript, typescript_jsx, xhtml, xml, yaml""".trim().split(Regex("""\s*,\s*""")).toSet()
 
     init {
       for (language in LanguageUtil.getFileLanguages()) {
@@ -696,6 +700,9 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         languageIndexLookup[nextLanguageId] = li
       }
     }
+
+    fun hasLanguage(idNormalized: String) =
+      cannedLanguageList.contains(idNormalized) || languageLookup.containsKey(idNormalized)
 
     private fun getMatchingColors(color: Color?): Array<Color?> {
       if (color == null)
@@ -713,7 +720,18 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       return cachedColors[color]!!
     }
 
-    val Language.idLc get(): String = this.id.toLowerCase().replace(' ', '_')
+    fun normalizeLanguageId(id: String, handleAltNames: Boolean = false): String {
+      var newId = id.toLowerCase().replace(' ', '_')
+
+      if (handleAltNames)
+        newId = newId.replace(Regex("""ecma.?script.*"""), "javascript")
+
+      return newId
+    }
+
+    val Language.idNormalized get(): String = normalizeLanguageId(this.id, true)
+
+    private val Language.idLc get(): String = normalizeLanguageId(this.id)
 
     val Language.rootLanguage get(): Language {
       var lang = this
