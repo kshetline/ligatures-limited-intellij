@@ -39,6 +39,10 @@ tasks {
   }
 }
 
+val jar by tasks.getting(Jar::class) {
+  duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
 tasks.getByName<org.jetbrains.intellij.tasks.PatchPluginXmlTask>("patchPluginXml") {
   changeNotes("""
       <h2>1.0.0</h2>
