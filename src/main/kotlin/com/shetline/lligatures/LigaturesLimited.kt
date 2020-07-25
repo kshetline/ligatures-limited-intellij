@@ -9,12 +9,18 @@ import com.intellij.ide.AppLifecycleListener
 import com.intellij.lang.Language
 import com.intellij.lang.LanguageUtil
 import com.intellij.lang.annotation.HighlightSeverity
+import com.intellij.notification.NotificationDisplayType
+import com.intellij.notification.NotificationGroup
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.LogicalPosition
-import com.intellij.openapi.editor.colors.*
+import com.intellij.openapi.editor.colors.CodeInsightColors
+import com.intellij.openapi.editor.colors.EditorColorsManager
+import com.intellij.openapi.editor.colors.TextAttributesKey
+import com.intellij.openapi.editor.colors.TextAttributesScheme
 import com.intellij.openapi.editor.event.CaretEvent
 import com.intellij.openapi.editor.event.CaretListener
 import com.intellij.openapi.editor.event.EditorFactoryEvent
@@ -24,6 +30,7 @@ import com.intellij.openapi.editor.impl.EditorImpl
 import com.intellij.openapi.editor.markup.*
 import com.intellij.openapi.fileTypes.SyntaxHighlighter
 import com.intellij.openapi.fileTypes.SyntaxHighlighterFactory
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
@@ -36,10 +43,9 @@ import com.intellij.util.xmlb.XmlSerializerUtil.copyBean
 import com.shetline.lligatures.LigaturesLimitedSettings.CursorMode
 import org.jetbrains.annotations.Nullable
 import java.awt.Color
+import java.io.PrintWriter
+import java.io.StringWriter
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.Comparator
-import kotlin.collections.ArrayList
-import kotlin.collections.HashMap
 
 class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycleListener, HighlightVisitor,
     TextEditorHighlightingPassFactory, TextEditorHighlightingPassFactoryRegistrar, CaretListener,
@@ -63,8 +69,11 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     try {
       searchForLigatures(file, holder)
     }
+    catch (e: ProcessCanceledException) {
+      throw e
+    }
     catch (e: Exception) {
-      e.printStackTrace()
+      notify("Exception during searchForLigatures: ${e.message ?: e.javaClass.simpleName}; ${stackTraceAsString(e)}")
     }
 
     return true
@@ -83,6 +92,9 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         file.project, file.virtualFile)
 
     if (editor != null) {
+      if (editor.isOneLineMode)
+        return
+
       highlightRechecks[editor]?.interrupt()
       highlightRechecks.remove(editor)
     }
@@ -187,6 +199,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
           syntaxHighlighters.remove(editor)
         }
 
+        cleanUpStrayHighlights(editor)
+
         if (newHighlights.size > 0)
           applyHighlighters(editor, syntaxHighlighter, defaultForeground, newHighlights)
 
@@ -248,7 +262,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         }
       }
       catch (e: Exception) {
-        println(e.message)
+        notify("Exception during applyHighlighters: ${e.message ?: e.javaClass.simpleName}; ${stackTraceAsString(e)}")
       }
     }
 
@@ -526,6 +540,22 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         (h.textAttributes?.foregroundColor != null || getLanguageHints(h.textAttributes) != null) }
   }
 
+  private fun cleanUpStrayHighlights(editor: Editor?)
+  {
+    if (editor !is EditorImpl)
+      return
+
+    val highlighters = arrayOf(*editor.filteredDocumentMarkupModel.allHighlighters)
+
+    highlighters.sortWith(Comparator { a, b ->
+      if (a.startOffset != b.startOffset) a.startOffset - b.startOffset else b.endOffset - a.endOffset
+    })
+
+    val strays = highlighters.filter { h -> isMyLayer(h.layer) && h.textAttributes?.foregroundColor is LLColor }
+
+    strays.forEach { h -> editor.filteredDocumentMarkupModel.removeHighlighter(h) }
+  }
+
   data class LanguageHints(var languageId: String, var elemType: IElementType?)
   private fun getLanguageHints(textAttrs: TextAttributes?): LanguageHints? {
     if (textAttrs == null || textAttrs.foregroundColor != null || textAttrs.effectColor == null ||
@@ -660,6 +690,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   )
 
   class ColorPayload(var elementType: IElementType?, var language: String): Color(0, true)
+  class LLColor(rgb: Int) : Color(rgb)
 
   companion object {
     private const val MY_LIGATURE_BACKGROUND_LAYER = HighlighterLayer.HYPERLINK - 3
@@ -669,9 +700,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private const val HIGHLIGHT_RECHECK_DELAY = 1000L // milliseconds
     private const val MAX_HIGHLIGHT_RECHECK_COUNT = 10
 
-    private fun isMyLayer(layer: Int): Boolean {
-      return layer == MY_LIGATURE_LAYER || layer == MY_LIGATURE_BACKGROUND_LAYER || layer == MY_SELECTION_LAYER
-    }
+    private val NOTIFIER = NotificationGroup("Ligatures Limited", NotificationDisplayType.NONE, true)
+
     private val DEBUG_GREEN = Color(0x009900)
     private val DEBUG_RED = Color(0xDD0000)
     private val currentEditors = HashMap<PsiFile, Editor>()
@@ -701,6 +731,22 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       }
     }
 
+    private fun isMyLayer(layer: Int): Boolean {
+      return layer == MY_LIGATURE_LAYER || layer == MY_LIGATURE_BACKGROUND_LAYER || layer == MY_SELECTION_LAYER
+    }
+
+    fun notify(message: String, notificationType: NotificationType = NotificationType.ERROR) {
+      NOTIFIER.createNotification(message, notificationType).notify(null)
+    }
+
+    private fun stackTraceAsString(t: Throwable): String {
+      val sw = StringWriter()
+
+      t.printStackTrace(PrintWriter(sw))
+
+      return sw.toString()
+    }
+
     fun hasLanguage(idNormalized: String) =
       cannedLanguageList.contains(idNormalized) || languageLookup.containsKey(idNormalized)
 
@@ -712,9 +758,9 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         val rgb = color.rgb and 0x00FFFFFF
 
         if (color.blue > 253)
-          cachedColors[color] = arrayOf<Color?>(Color(alpha or (rgb - 1)), Color(alpha or (rgb - 2)))
+          cachedColors[color] = arrayOf<Color?>(LLColor(alpha or (rgb - 1)), LLColor(alpha or (rgb - 2)))
         else
-          cachedColors[color] = arrayOf<Color?>(Color(alpha or (rgb + 1)), Color(alpha or (rgb + 2)))
+          cachedColors[color] = arrayOf<Color?>(LLColor(alpha or (rgb + 1)), LLColor(alpha or (rgb + 2)))
       }
 
       return cachedColors[color]!!

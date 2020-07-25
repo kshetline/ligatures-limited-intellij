@@ -38,6 +38,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
       extSettingsState.config = parseJson(settingsState.json)
     }
     catch (e: Exception) {
+      LigaturesLimited.notify("Reverting to default settings due to invalid saved configuration: ${e.message}")
       settingsState.json = defaultJson
       extSettingsState.config = parseJson(settingsState.json)
     }
