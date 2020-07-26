@@ -45,7 +45,6 @@ import org.jetbrains.annotations.Nullable
 import java.awt.Color
 import java.io.PrintWriter
 import java.io.StringWriter
-import java.util.concurrent.ConcurrentHashMap
 
 class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycleListener, HighlightVisitor,
     TextEditorHighlightingPassFactory, TextEditorHighlightingPassFactoryRegistrar, CaretListener,
@@ -90,14 +89,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     if (languageInfo != null && languageInfo.syntaxHighlighter == null)
       languageInfo.syntaxHighlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(file.language,
         file.project, file.virtualFile)
-
-    if (editor != null) {
-      if (editor.isOneLineMode)
-        return
-
-      highlightRechecks[editor]?.interrupt()
-      highlightRechecks.remove(editor)
-    }
 
     @Suppress("ConstantConditionIf")
     if (debugCategories) {
@@ -210,7 +201,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   }
 
   private fun applyHighlighters(editor: Editor, syntaxHighlighter: SyntaxHighlighter,
-                                defaultForeground: Color, highlighters: ArrayList<LigatureHighlight>, count: Int = 0) {
+                                defaultForeground: Color, highlighters: ArrayList<LigatureHighlight>) {
     if (editor !is EditorImpl || highlighters.isEmpty())
       return
 
@@ -219,10 +210,11 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val existingHighlighters = getHighlighters(editor)
 
     for (highlighter in highlighters) {
+      val index = highlighter.index % 2
       val foreground = highlighter.color ?:
         getHighlightColors(highlighter.elem, highlighter.ligature, highlighter.index, highlighter.span,
           syntaxHighlighter, editor, editor.colorsScheme,
-          defaultForeground, existingHighlighters)[highlighter.index % 2]
+          defaultForeground, existingHighlighters)?.getOrNull(index)
       val background = if (highlighter.color != null) defaultForeground else null
 
       try {
@@ -239,9 +231,11 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         }
 
         if (needToAdd) {
+          val style = if (foreground == null) BREAK_STYLE shl index else 0
+
           newHighlight = markupModel.addRangeHighlighter(
             highlighter.index, highlighter.index + highlighter.span, MY_LIGATURE_LAYER,
-            TextAttributes(foreground, null, null, EffectType.BOXED, 0),
+            TextAttributes(foreground, null, null, EffectType.BOXED, style),
             HighlighterTargetArea.EXACT_RANGE
           )
         }
@@ -267,13 +261,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     }
 
     syntaxHighlighters[editor] = newHighlights
-
-    if (count < MAX_HIGHLIGHT_RECHECK_COUNT && !highlightRechecks.contains(editor)) {
-      val recheck = HighlightRecheck(editor, syntaxHighlighter, defaultForeground, highlighters, count + 1)
-
-      highlightRechecks[editor] = recheck
-      recheck.start()
-    }
   }
 
   private fun getMatchingConfiguration(elem: PsiElement, inCategory: ElementCategory?, baseLanguage: String,
@@ -370,8 +357,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     if (currentFiles[editor] != null)
       currentEditors.remove(currentFiles[editor])
 
-    highlightRechecks[editor]?.interrupt()
-    highlightRechecks.remove(editor)
     currentFiles.remove(editor)
     cursorHighlighters.remove(editor)
     syntaxHighlighters.remove(editor)
@@ -424,10 +409,13 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
             val colors = if (!debug) getHighlightColors(elem, lig.value, lineStart + i, 1,
                 syntaxHighlighter, editor, editor.colorsScheme, defaultForeground)
               else getMatchingColors(DEBUG_RED)
+            val index = (lineStart + i) % 2
+            val color = colors?.getOrNull(index)
+            val style = if (color == null) BREAK_STYLE shl index else 0
 
             newHighlights.add(markupModel.addRangeHighlighter(
               lineStart + i, lineStart + i + 1, MY_SELECTION_LAYER,
-              TextAttributes(colors[(lineStart + i) % 2], background, null, EffectType.BOXED, 0),
+              TextAttributes(color, background, null, EffectType.BOXED, style),
               HighlighterTargetArea.EXACT_RANGE
             ))
           }
@@ -449,7 +437,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   private fun getHighlightColors(elem: PsiElement, ligature: String, textOffset: Int, span: Int,
       syntaxHighlighterIn: SyntaxHighlighter?, editor: EditorImpl?,
       colorsScheme: TextAttributesScheme, defaultForeground: Color,
-      defaultHighlighters: List<RangeHighlighter>? = null): Array<Color?> {
+      defaultHighlighters: List<RangeHighlighter>? = null): Array<Color?>? {
     var color: Color? = null
     val startOffset = maxOf(elem.textRange.startOffset, textOffset)
     val endOffset = minOf(elem.textRange.endOffset, textOffset + span)
@@ -459,12 +447,15 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val startIndex = findFirstIndex(highlighters, startOffset)
     var syntaxHighlighter = syntaxHighlighterIn
     var hintType: IElementType? = null
+    var style = 0
 
     if (startIndex >= 0) {
       for (i in startIndex until highlighters.size) {
         val highlighter = highlighters[i]
 
         if (highlighter.startOffset <= startOffset && endOffset <= highlighter.endOffset) {
+          style = style or (highlighter.textAttributes!!.fontType and STYLE_MASK)
+
           val specificColor = highlighter.textAttributes!!.foregroundColor
 
           if (specificColor == null) {
@@ -498,6 +489,9 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
           break
       }
     }
+
+    if (color == null && style == 0 && Regex("""\w+""").matches(ligature))
+      return null
 
     if (color == null && editor?.highlighter is LexerEditorHighlighter && syntaxHighlighter == syntaxHighlighterIn) {
       try {
@@ -653,26 +647,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     override fun doApplyInformationToEditor() {}
   }
 
-  inner class HighlightRecheck(private var editor: Editor, private var syntaxHighlighter: SyntaxHighlighter,
-      private var defaultForeground: Color, private var highlighters: ArrayList<LigatureHighlight>,
-      private var count: Int) : Thread() {
-    override fun run() {
-      try {
-        sleep(HIGHLIGHT_RECHECK_DELAY)
-      }
-      catch (e: InterruptedException) {
-        return
-      }
-
-      ApplicationManager.getApplication().invokeLater {
-        if (!highlightRechecks.contains(editor)) {
-          highlightRechecks.remove(editor)
-          applyHighlighters(editor, syntaxHighlighter, defaultForeground, highlighters, count)
-        }
-      }
-    }
-  }
-
   data class LigatureHighlight (
     var color: Color?,
     var elem: PsiElement,
@@ -696,9 +670,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private const val MY_LIGATURE_BACKGROUND_LAYER = HighlighterLayer.HYPERLINK - 3
     private const val MY_LIGATURE_LAYER = HighlighterLayer.HYPERLINK - 2
     private const val MY_SELECTION_LAYER = HighlighterLayer.HYPERLINK - 1
-
-    private const val HIGHLIGHT_RECHECK_DELAY = 1000L // milliseconds
-    private const val MAX_HIGHLIGHT_RECHECK_COUNT = 10
+    private const val STYLE_MASK = 0x3
+    private const val BREAK_STYLE = 0x4 // A fake font style one bit position higher than ITALIC or BOLD
 
     private val NOTIFIER = NotificationGroup("Ligatures Limited", NotificationDisplayType.NONE, true)
 
@@ -708,7 +681,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private val currentFiles = HashMap<Editor, PsiFile>()
     private val cursorHighlighters = HashMap<Editor, List<RangeHighlighter>>()
     private val syntaxHighlighters = HashMap<Editor, List<RangeHighlighter>>()
-    private val highlightRechecks = ConcurrentHashMap<Editor, HighlightRecheck>()
     private var nextLanguageId = 0
 
     private val cachedColors: MutableMap<Color, Array<Color?>> = HashMap()
