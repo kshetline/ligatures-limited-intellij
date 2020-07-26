@@ -143,7 +143,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
           val phase = (matchIndex + i) % 2
           val foreground = if (debug) colors[phase] else null
 
-          newHighlights.add(LigatureHighlight(foreground, elem, matchText, matchIndex + i, 1, null, null))
+          newHighlights.add(LigatureHighlight(foreground, elem, category, matchText, matchIndex + i, 1, null, null))
         }
 
         lastDebugHighlight = null
@@ -155,7 +155,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         if (lastDebugHighlight != null && (diff == 0 || diff == 1) && lastDebugCategory == category)
           lastDebugHighlight.span += matchText.length + extra
         else {
-          lastDebugHighlight = LigatureHighlight(DEBUG_GREEN, elem, matchText, matchIndex,
+          lastDebugHighlight = LigatureHighlight(DEBUG_GREEN, elem, category, matchText, matchIndex,
             matchText.length + extra, null, null)
           lastDebugCategory = category
           newHighlights.add(lastDebugHighlight)
@@ -212,10 +212,13 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     for (highlighter in highlighters) {
       val index = highlighter.index % 2
       val foreground = highlighter.color ?:
-        getHighlightColors(highlighter.elem, highlighter.ligature, highlighter.index, highlighter.span,
-          syntaxHighlighter, editor, editor.colorsScheme,
+        getHighlightColors(highlighter.elem, highlighter.category, highlighter.ligature,
+          highlighter.index, highlighter.span, syntaxHighlighter, editor, editor.colorsScheme,
           defaultForeground, existingHighlighters)?.getOrNull(index)
       val background = if (highlighter.color != null) defaultForeground else null
+
+      if (foreground === DONT_SUPPRESS)
+        continue
 
       try {
         var needToAdd = true
@@ -406,18 +409,19 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         if (mode == CursorMode.LINE ||
             (mode == CursorMode.CURSOR && pos.column in lig.range.first..lig.range.last + extra + 1)) {
           for (i in lig.range.first..lig.range.last + extra) {
-            val colors = if (!debug) getHighlightColors(elem, lig.value, lineStart + i, 1,
-                syntaxHighlighter, editor, editor.colorsScheme, defaultForeground)
-              else getMatchingColors(DEBUG_RED)
+            val colors = if (!debug) getHighlightColors(elem, category, lig.value, lineStart + i, 1,
+                  syntaxHighlighter, editor, editor.colorsScheme, defaultForeground)
+                else getMatchingColors(DEBUG_RED)
             val index = (lineStart + i) % 2
             val color = colors?.getOrNull(index)
             val style = if (color == null) BREAK_STYLE shl index else 0
 
-            newHighlights.add(markupModel.addRangeHighlighter(
-              lineStart + i, lineStart + i + 1, MY_SELECTION_LAYER,
-              TextAttributes(color, background, null, EffectType.BOXED, style),
-              HighlighterTargetArea.EXACT_RANGE
-            ))
+            if (color !== DONT_SUPPRESS)
+              newHighlights.add(markupModel.addRangeHighlighter(
+                lineStart + i, lineStart + i + 1, MY_SELECTION_LAYER,
+                TextAttributes(color, background, null, EffectType.BOXED, style),
+                HighlighterTargetArea.EXACT_RANGE
+              ))
           }
         }
       }
@@ -434,8 +438,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     copyBean(state, this)
   }
 
-  private fun getHighlightColors(elem: PsiElement, ligature: String, textOffset: Int, span: Int,
-      syntaxHighlighterIn: SyntaxHighlighter?, editor: EditorImpl?,
+  private fun getHighlightColors(elem: PsiElement, category: ElementCategory?, ligature: String,
+      textOffset: Int, span: Int, syntaxHighlighterIn: SyntaxHighlighter?, editor: EditorImpl?,
       colorsScheme: TextAttributesScheme, defaultForeground: Color,
       defaultHighlighters: List<RangeHighlighter>? = null): Array<Color?>? {
     var color: Color? = null
@@ -490,8 +494,12 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       }
     }
 
-    if (color == null && style == 0 && Regex("""\w+""").matches(ligature))
-      return null
+    if (color == null && isWordy(ligature)) {
+      if (style == 0 || !PROBABLY_SAFE_WITH_LEXER_COLOR.contains(category))
+        return null
+      else
+        color = DONT_SUPPRESS
+    }
 
     if (color == null && editor?.highlighter is LexerEditorHighlighter && syntaxHighlighter == syntaxHighlighterIn) {
       try {
@@ -545,7 +553,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       if (a.startOffset != b.startOffset) a.startOffset - b.startOffset else b.endOffset - a.endOffset
     })
 
-    val strays = highlighters.filter { h -> isMyLayer(h.layer) && h.textAttributes?.foregroundColor is LLColor }
+    val strays = highlighters.filter { h -> isMyLayer(h.layer) &&
+        (h.textAttributes?.foregroundColor is LLColor || (h.textAttributes?.fontType ?: 0) >= BREAK_STYLE) }
 
     strays.forEach { h -> editor.filteredDocumentMarkupModel.removeHighlighter(h) }
   }
@@ -650,6 +659,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   data class LigatureHighlight (
     var color: Color?,
     var elem: PsiElement,
+    var category: ElementCategory?,
     var ligature: String,
     var index: Int,
     var span: Int,
@@ -671,7 +681,12 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private const val MY_LIGATURE_LAYER = HighlighterLayer.HYPERLINK - 2
     private const val MY_SELECTION_LAYER = HighlighterLayer.HYPERLINK - 1
     private const val STYLE_MASK = 0x3
-    private const val BREAK_STYLE = 0x4 // A fake font style one bit position higher than ITALIC or BOLD
+    private const val BREAK_STYLE = 0x4 // A fake font style one bit position higher than BOLD or ITALIC
+    private val DONT_SUPPRESS = LLColor(0x808080)
+    private val PROBABLY_SAFE_WITH_LEXER_COLOR = setOf(
+      ElementCategory.BLOCK_COMMENT, ElementCategory.LINE_COMMENT, ElementCategory.STRING,
+      ElementCategory.NAMED_OPERATOR, ElementCategory.NUMBER, ElementCategory.OPERATOR,
+      ElementCategory.REGEXP, ElementCategory.STRING, ElementCategory.TEXT)
 
     private val NOTIFIER = NotificationGroup("Ligatures Limited", NotificationDisplayType.NONE, true)
 
@@ -725,6 +740,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private fun getMatchingColors(color: Color?): Array<Color?> {
       if (color == null)
         return noColors
+      else if (color === DONT_SUPPRESS)
+        return arrayOf(DONT_SUPPRESS, DONT_SUPPRESS)
       else if (!cachedColors.containsKey(color)) {
         val alpha = color.rgb and 0xFF000000.toInt()
         val rgb = color.rgb and 0x00FFFFFF
@@ -737,6 +754,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
       return cachedColors[color]!!
     }
+
+    private fun isWordy(s: String) = Regex("""\w+""").matches(s)
 
     fun normalizeLanguageId(id: String, handleAltNames: Boolean = false): String {
       var newId = id.toLowerCase().replace(' ', '_')
