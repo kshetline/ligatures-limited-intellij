@@ -191,7 +191,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         val oldHighlighters = syntaxHighlighters[editor]
 
         if (oldHighlighters != null && editor is EditorImpl) {
-          oldHighlighters.forEach { highlighter -> editor.filteredDocumentMarkupModel.removeHighlighter(highlighter) }
+          oldHighlighters.forEach { editor.filteredDocumentMarkupModel.removeHighlighter(it) }
           syntaxHighlighters.remove(editor)
         }
 
@@ -228,6 +228,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       try {
         var needToAdd = true
         var newHighlight: RangeHighlighter? = null
+        val highlightEnd = highlighter.index + highlighter.span
 
         if (highlighter.lastHighlighter != null) {
           if (foreground != null && foreground == highlighter.lastHighlighter?.textAttributes?.foregroundColor) {
@@ -238,11 +239,11 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
             markupModel.removeHighlighter(highlighter.lastHighlighter!!)
         }
 
-        if (needToAdd) {
+        if (needToAdd && highlightEnd < editor.document.textLength) {
           val style = if (foreground == null) BREAK_STYLE shl index else 0
 
           newHighlight = markupModel.addRangeHighlighter(
-            highlighter.index, highlighter.index + highlighter.span, MY_LIGATURE_LAYER,
+            highlighter.index, highlightEnd, MY_LIGATURE_LAYER,
             TextAttributes(foreground, null, null, EffectType.BOXED, style),
             HighlighterTargetArea.EXACT_RANGE
           )
@@ -252,10 +253,10 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         highlighter.lastHighlighter = newHighlight
 
         if (background != null) {
-          if (highlighter.lastBackground == null) {
+          if (highlighter.lastBackground == null && highlightEnd < editor.document.textLength) {
             // Apply background at lower layer so selection layer can override it
             highlighter.lastBackground = markupModel.addRangeHighlighter(
-              highlighter.index, highlighter.index + highlighter.span, MY_LIGATURE_BACKGROUND_LAYER,
+              highlighter.index, highlightEnd, MY_LIGATURE_BACKGROUND_LAYER,
               TextAttributes(null, background, null, EffectType.BOXED, 0),
               HighlighterTargetArea.EXACT_RANGE)
           }
@@ -394,7 +395,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val mode = settings.state!!.cursorMode
 
     if (oldHighlights != null) {
-      oldHighlights.forEach { highlighter -> markupModel.removeHighlighter(highlighter) }
+      oldHighlights.forEach { markupModel.removeHighlighter(it) }
       cursorHighlighters.remove(editor)
     }
 
@@ -430,7 +431,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
             val color = colors?.getOrNull(index)
             val style = if (color == null) BREAK_STYLE shl index else 0
 
-            if (color !== DONT_SUPPRESS)
+            if (color !== DONT_SUPPRESS && lineStart + i + 1 < editor.document.textLength)
               newHighlights.add(markupModel.addRangeHighlighter(
                 lineStart + i, lineStart + i + 1, MY_SELECTION_LAYER,
                 TextAttributes(color, background, null, EffectType.BOXED, style),
@@ -552,7 +553,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       if (a.startOffset != b.startOffset) a.startOffset - b.startOffset else b.endOffset - a.endOffset
     })
 
-    return highlighters.filter { h -> !isMyLayer(h.layer) && h.layer < HighlighterLayer.HYPERLINK &&
+    return highlighters.filter { h -> !isMyLayer(h.layer) && h.layer < HighlighterLayer.HYPERLINK
         (h.textAttributes?.foregroundColor != null || getLanguageHints(h.textAttributes) != null) }
   }
 
@@ -570,7 +571,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val strays = highlighters.filter { h -> isMyLayer(h.layer) &&
         (h.textAttributes?.foregroundColor is LLColor || (h.textAttributes?.fontType ?: 0) >= BREAK_STYLE) }
 
-    strays.forEach { h -> editor.filteredDocumentMarkupModel.removeHighlighter(h) }
+    strays.forEach { editor.filteredDocumentMarkupModel.removeHighlighter(it) }
   }
 
   data class LanguageHints(var languageId: String, var elemType: IElementType?)
@@ -684,7 +685,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       ApplicationManager.getApplication().invokeLater {
         if (highlightRechecks.containsKey(editor)) {
           highlightRechecks.remove(editor)
-          applyHighlighters(editor, syntaxHighlighter, defaultForeground, highlighters, count)
+          applyHighlighters(editor, syntaxHighlighter, defaultForeground, highlighters, count + 1)
         }
       }
     }
@@ -759,6 +760,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     }
 
     fun notify(message: String, notificationType: NotificationType = NotificationType.ERROR) {
+      println("$notificationType: $message")
       NOTIFIER.createNotification(message, notificationType).notify(null)
     }
 

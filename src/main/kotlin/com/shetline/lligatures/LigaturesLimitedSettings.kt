@@ -206,7 +206,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
       set.remove("-")
     }
 
-    set.forEach { c -> klass += escapeForRegex(c) }
+    set.forEach { klass += escapeForRegex(it) }
 
     return "$klass]"
   }
