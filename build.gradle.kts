@@ -1,7 +1,3 @@
-tasks.withType<Jar> {
-  duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-}
-
 plugins {
   id("org.jetbrains.intellij") version "0.4.20"
   java
