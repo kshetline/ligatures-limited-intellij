@@ -117,8 +117,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     var match: MatchResult? = null
     val syntaxHighlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(file.language, file.project, file.virtualFile)
     val defaultForeground = EditorColorsManager.getInstance().globalScheme.defaultForeground
-    val newHighlights = ArrayList<LigatureHighlight>()
-    var lastDebugHighlight: LigatureHighlight? = null
+    val newSpans = ArrayList<LigatureSpan>()
+    var lastDebugSpan: LigatureSpan? = null
     var lastDebugCategory: ElementCategory? = null
 
     while (index < text.length && { match = ligatures.find(text, index); match }() != null) {
@@ -150,27 +150,27 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
           val phase = (matchIndex + i) % 2
           val foreground = if (debug) colors[phase] else null
 
-          newHighlights.add(LigatureHighlight(foreground, elem, category, matchText, matchIndex + i, 1, null, null))
+          newSpans.add(LigatureSpan(foreground, elem, category, matchText, matchIndex + i, 1, null, null))
         }
 
-        lastDebugHighlight = null
+        lastDebugSpan = null
       }
       else if (debug) {
-        val diff = if (lastDebugHighlight != null)
-          lastDebugHighlight.index + lastDebugHighlight.span - lastDebugHighlight.index else 0
+        val diff = if (lastDebugSpan != null)
+          lastDebugSpan.index + lastDebugSpan.span - lastDebugSpan.index else 0
 
-        if (lastDebugHighlight != null && (diff == 0 || diff == 1) && lastDebugCategory == category)
-          lastDebugHighlight.span += matchText.length + extra
+        if (lastDebugSpan != null && (diff == 0 || diff == 1) && lastDebugCategory == category)
+          lastDebugSpan.span += matchText.length + extra
         else {
-          lastDebugHighlight = LigatureHighlight(DEBUG_GREEN, elem, category, matchText, matchIndex,
+          lastDebugSpan = LigatureSpan(DEBUG_GREEN, elem, category, matchText, matchIndex,
             matchText.length + extra, null, null)
           lastDebugCategory = category
-          newHighlights.add(lastDebugHighlight)
+          newSpans.add(lastDebugSpan)
         }
       }
     }
 
-    val hIndex = if (lastDebugHighlight != null) lastDebugHighlight.index + lastDebugHighlight.span else -1
+    val hIndex = if (lastDebugSpan != null) lastDebugSpan.index + lastDebugSpan.span else -1
 
     if (hIndex > 0 && hIndex < text.length - 1) {
       val extensionCandidate = text.substring(hIndex - 1, hIndex + 1)
@@ -183,46 +183,40 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
           val debugCategory = ElementCategorizer.categoryFor(elem, extensionCandidate, (hIndex - 1))
 
           if (debugCategory == lastDebugCategory)
-            ++lastDebugHighlight!!.span
+            ++lastDebugSpan!!.span
         }
       }
     }
 
     if (editor != null && languageId == null) {
       ApplicationManager.getApplication().invokeLater {
-        val oldHighlighters = syntaxHighlighters[editor]
-
-        if (oldHighlighters != null && editor is EditorImpl) {
-          oldHighlighters.forEach { editor.filteredDocumentMarkupModel.removeHighlighter(it) }
-          syntaxHighlighters.remove(editor)
-        }
-
+        removePreviousHighlights(editor)
         cleanUpStrayHighlights(editor)
 
-        if (newHighlights.size > 0)
-          applyHighlighters(editor, syntaxHighlighter, defaultForeground, newHighlights)
+        if (newSpans.size > 0)
+          applyLigatureSpans(editor, syntaxHighlighter, defaultForeground, newSpans)
 
         highlightForCaret(editor, editor.caretModel.logicalPosition)
       }
     }
   }
 
-  private fun applyHighlighters(editor: Editor, syntaxHighlighter: SyntaxHighlighter,
-      defaultForeground: Color, highlighters: ArrayList<LigatureHighlight>, count: Int = 0) {
-    if (editor !is EditorImpl || highlighters.isEmpty())
+  private fun applyLigatureSpans(editor: Editor, syntaxHighlighter: SyntaxHighlighter,
+                                 defaultForeground: Color, spans: ArrayList<LigatureSpan>, count: Int = 0) {
+    if (editor !is EditorImpl || spans.isEmpty())
       return
 
     val markupModel = editor.filteredDocumentMarkupModel
     val newHighlights = ArrayList<RangeHighlighter>()
     val existingHighlighters = getHighlighters(editor)
 
-    for (highlighter in highlighters) {
-      val index = highlighter.index % 2
-      val foreground = highlighter.color ?:
-        getHighlightColors(highlighter.elem, highlighter.category, highlighter.ligature,
-          highlighter.index, highlighter.span, syntaxHighlighter, editor, editor.colorsScheme,
+    for (span in spans) {
+      val index = span.index % 2
+      val foreground = span.color ?:
+        getHighlightColors(span.elem, span.category, span.ligature,
+          span.index, span.span, syntaxHighlighter, editor, editor.colorsScheme,
           defaultForeground, existingHighlighters)?.getOrNull(index)
-      val background = if (highlighter.color != null) defaultForeground else null
+      val background = if (span.color != null) defaultForeground else null
 
       if (foreground === DONT_SUPPRESS)
         continue
@@ -230,22 +224,22 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       try {
         var needToAdd = true
         var newHighlight: RangeHighlighter? = null
-        val highlightEnd = highlighter.index + highlighter.span
+        val highlightEnd = span.index + span.span
 
-        if (highlighter.lastHighlighter != null) {
-          if (foreground != null && foreground == highlighter.lastHighlighter?.textAttributes?.foregroundColor) {
+        if (span.lastHighlighter != null) {
+          if (foreground != null && foreground == span.lastHighlighter?.textAttributes?.foregroundColor) {
             needToAdd = false
-            newHighlight = highlighter.lastHighlighter!!
+            newHighlight = span.lastHighlighter!!
           }
           else
-            markupModel.removeHighlighter(highlighter.lastHighlighter!!)
+            markupModel.removeHighlighter(span.lastHighlighter!!)
         }
 
         if (needToAdd && highlightEnd < editor.document.textLength) {
           val style = if (foreground == null) BREAK_STYLE shl index else 0
 
           newHighlight = markupModel.addRangeHighlighter(
-            highlighter.index, highlightEnd, MY_LIGATURE_LAYER,
+            span.index, highlightEnd, MY_LIGATURE_LAYER,
             TextAttributes(foreground, null, null, EffectType.BOXED, style),
             HighlighterTargetArea.EXACT_RANGE
           )
@@ -253,19 +247,19 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
         if (newHighlight != null) {
           newHighlights.add(newHighlight)
-          highlighter.lastHighlighter = newHighlight
+          span.lastHighlighter = newHighlight
         }
 
         if (background != null) {
-          if (highlighter.lastBackground == null && highlightEnd < editor.document.textLength) {
+          if (span.lastBackground == null && highlightEnd < editor.document.textLength) {
             // Apply background at lower layer so selection layer can override it
-            highlighter.lastBackground = markupModel.addRangeHighlighter(
-              highlighter.index, highlightEnd, MY_LIGATURE_BACKGROUND_LAYER,
+            span.lastBackground = markupModel.addRangeHighlighter(
+              span.index, highlightEnd, MY_LIGATURE_BACKGROUND_LAYER,
               TextAttributes(null, background, null, EffectType.BOXED, 0),
               HighlighterTargetArea.EXACT_RANGE)
           }
 
-          newHighlights.add(highlighter.lastBackground!!)
+          newHighlights.add(span.lastBackground!!)
         }
       }
       catch (e: Exception) {
@@ -276,7 +270,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     syntaxHighlighters[editor] = newHighlights
 
     if (count < HIGHLIGHT_RECHECK_DELAYS.size && !highlightRechecks.contains(editor)) {
-      val recheck = HighlightRecheck(editor, syntaxHighlighter, defaultForeground, highlighters, count)
+      val recheck = HighlightRecheck(editor, syntaxHighlighter, defaultForeground, spans, count)
 
       highlightRechecks[editor] = recheck
       recheck.start()
@@ -570,6 +564,15 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         (h.textAttributes?.foregroundColor != null || getLanguageHints(h.textAttributes) != null) }
   }
 
+  private fun removePreviousHighlights(editor: Editor?) {
+    val oldHighlighters = syntaxHighlighters[editor]
+
+    if (oldHighlighters != null && editor is EditorImpl) {
+      oldHighlighters.forEach { editor.filteredDocumentMarkupModel.removeHighlighter(it) }
+      syntaxHighlighters.remove(editor)
+    }
+  }
+
   private fun cleanUpStrayHighlights(editor: Editor?)
   {
     if (editor !is EditorImpl)
@@ -685,8 +688,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   }
 
   inner class HighlightRecheck(private var editor: Editor, private var syntaxHighlighter: SyntaxHighlighter,
-      private var defaultForeground: Color, private var highlighters: ArrayList<LigatureHighlight>,
-      private var count: Int) : Thread() {
+                               private var defaultForeground: Color, private var spans: ArrayList<LigatureSpan>,
+                               private var count: Int) : Thread() {
     override fun run() {
       try {
         sleep(HIGHLIGHT_RECHECK_DELAYS[count])
@@ -698,7 +701,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       ApplicationManager.getApplication().invokeLater {
         if (highlightRechecks.containsKey(editor)) {
           highlightRechecks.remove(editor)
-          applyHighlighters(editor, syntaxHighlighter, defaultForeground, highlighters, count + 1)
+          applyLigatureSpans(editor, syntaxHighlighter, defaultForeground, spans, count + 1)
         }
       }
     }
@@ -723,7 +726,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     }
   }
 
-  data class LigatureHighlight (
+  data class LigatureSpan (
     var color: Color?,
     var elem: PsiElement,
     var category: ElementCategory?,
