@@ -1,3 +1,7 @@
+tasks.withType<Jar> {
+  duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
 plugins {
   id("org.jetbrains.intellij") version "0.4.20"
   java
@@ -37,10 +41,6 @@ tasks {
     kotlinOptions.jvmTarget = "1.8"
     kotlinOptions.freeCompilerArgs = listOf("-Xjvm-default=enable")
   }
-}
-
-val jar by tasks.getting(Jar::class) {
-  duplicatesStrategy = DuplicatesStrategy.INCLUDE
 }
 
 tasks.getByName<org.jetbrains.intellij.tasks.PatchPluginXmlTask>("patchPluginXml") {

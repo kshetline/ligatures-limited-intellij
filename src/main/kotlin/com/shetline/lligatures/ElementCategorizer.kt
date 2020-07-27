@@ -15,7 +15,6 @@ enum class ElementCategory {
   IDENTIFIER,
   KEYWORD,
   LINE_COMMENT,
-  NAMED_OPERATOR,
   NUMBER,
   OPERATOR,
   OTHER,

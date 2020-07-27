@@ -719,8 +719,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private val DONT_SUPPRESS = LLColor(0x808080)
     private val PROBABLY_SAFE_WITH_LEXER_COLOR = setOf(
       ElementCategory.BLOCK_COMMENT, ElementCategory.LINE_COMMENT, ElementCategory.STRING,
-      ElementCategory.NAMED_OPERATOR, ElementCategory.NUMBER, ElementCategory.OPERATOR,
-      ElementCategory.REGEXP, ElementCategory.STRING, ElementCategory.TEXT)
+      ElementCategory.NUMBER, ElementCategory.OPERATOR, ElementCategory.REGEXP, ElementCategory.STRING,
+      ElementCategory.TEXT)
     private val HIGHLIGHT_RECHECK_DELAYS = arrayOf(500L, 500L, 500L, 1000L, 1000L, 1000L, 2000L, 3000L) // milliseconds
 
     private val NOTIFIER = NotificationGroup("Ligatures Limited", NotificationDisplayType.NONE, true)
