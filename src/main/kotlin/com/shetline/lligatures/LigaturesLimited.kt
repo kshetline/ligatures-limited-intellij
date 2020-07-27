@@ -93,6 +93,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     if (editor != null) {
       highlightRechecks[editor]?.interrupt()
       highlightRechecks.remove(editor)
+      caretRechecks[editor]?.interrupt()
+      caretRechecks.remove(editor)
     }
 
     @Suppress("ConstantConditionIf")
@@ -249,8 +251,10 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
           )
         }
 
-        newHighlights.add(newHighlight!!)
-        highlighter.lastHighlighter = newHighlight
+        if (newHighlight != null) {
+          newHighlights.add(newHighlight)
+          highlighter.lastHighlighter = newHighlight
+        }
 
         if (background != null) {
           if (highlighter.lastBackground == null && highlightEnd < editor.document.textLength) {
@@ -375,6 +379,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     highlightRechecks[editor]?.interrupt()
     highlightRechecks.remove(editor)
+    caretRechecks[editor]?.interrupt()
+    caretRechecks.remove(editor)
     currentFiles.remove(editor)
     cursorHighlighters.remove(editor)
     syntaxHighlighters.remove(editor)
@@ -382,10 +388,10 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   }
 
   override fun caretPositionChanged(event: CaretEvent) {
-    highlightForCaret(event.editor, event.caret?.logicalPosition)
+    highlightForCaret(event.editor, event.caret?.logicalPosition, 0)
   }
 
-  private fun highlightForCaret(editor: Editor, pos: LogicalPosition?) {
+  private fun highlightForCaret(editor: Editor, pos: LogicalPosition?, count: Int = -1) {
     if (pos == null || editor !is EditorImpl)
       return
 
@@ -444,6 +450,13 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     if (newHighlights.size > 0)
       cursorHighlighters[editor] = newHighlights
+
+    if (count >= 0 && count < CARET_RECHECK_DELAYS.size && !caretRechecks.contains(editor)) {
+      val recheck = CaretRecheck(editor, pos, count)
+
+      caretRechecks[editor] = recheck
+      recheck.start()
+    }
   }
 
   @Nullable
@@ -553,7 +566,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       if (a.startOffset != b.startOffset) a.startOffset - b.startOffset else b.endOffset - a.endOffset
     })
 
-    return highlighters.filter { h -> !isMyLayer(h.layer) && h.layer < HighlighterLayer.HYPERLINK
+    return highlighters.filter { h -> !isMyLayer(h.layer) && h.layer < HighlighterLayer.HYPERLINK &&
         (h.textAttributes?.foregroundColor != null || getLanguageHints(h.textAttributes) != null) }
   }
 
@@ -691,6 +704,25 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     }
   }
 
+  inner class CaretRecheck(private var editor: Editor, private var pos: LogicalPosition, private var count: Int) :
+      Thread() {
+    override fun run() {
+      try {
+        sleep(CARET_RECHECK_DELAYS[count])
+      }
+      catch (e: InterruptedException) {
+        return
+      }
+
+      ApplicationManager.getApplication().invokeLater {
+        if (caretRechecks.containsKey(editor)) {
+          caretRechecks.remove(editor)
+          highlightForCaret(editor, pos, count + 1)
+        }
+      }
+    }
+  }
+
   data class LigatureHighlight (
     var color: Color?,
     var elem: PsiElement,
@@ -723,6 +755,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       ElementCategory.NUMBER, ElementCategory.OPERATOR, ElementCategory.REGEXP, ElementCategory.STRING,
       ElementCategory.TEXT)
     private val HIGHLIGHT_RECHECK_DELAYS = arrayOf(500L, 500L, 500L, 1000L, 1000L, 1000L, 2000L, 3000L) // milliseconds
+    private val CARET_RECHECK_DELAYS = arrayOf(500L, 500L, 1000L, 1000L) // milliseconds
 
     private val NOTIFIER = NotificationGroup("Ligatures Limited", NotificationDisplayType.NONE, true)
 
@@ -733,6 +766,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private val cursorHighlighters = HashMap<Editor, List<RangeHighlighter>>()
     private val syntaxHighlighters = HashMap<Editor, List<RangeHighlighter>>()
     private val highlightRechecks = ConcurrentHashMap<Editor, HighlightRecheck>()
+    private val caretRechecks = ConcurrentHashMap<Editor, CaretRecheck>()
     private var nextLanguageId = 0
 
     private val cachedColors: MutableMap<Color, Array<Color?>> = HashMap()
