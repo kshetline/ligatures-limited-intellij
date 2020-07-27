@@ -25,8 +25,10 @@ import com.intellij.openapi.editor.event.CaretEvent
 import com.intellij.openapi.editor.event.CaretListener
 import com.intellij.openapi.editor.event.EditorFactoryEvent
 import com.intellij.openapi.editor.event.EditorFactoryListener
+import com.intellij.openapi.editor.ex.RangeHighlighterEx
 import com.intellij.openapi.editor.ex.util.LexerEditorHighlighter
 import com.intellij.openapi.editor.impl.EditorImpl
+import com.intellij.openapi.editor.impl.event.MarkupModelListener
 import com.intellij.openapi.editor.markup.*
 import com.intellij.openapi.fileTypes.SyntaxHighlighter
 import com.intellij.openapi.fileTypes.SyntaxHighlighterFactory
@@ -93,8 +95,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     if (editor != null) {
       highlightRechecks[editor]?.interrupt()
       highlightRechecks.remove(editor)
-      caretRechecks[editor]?.interrupt()
-      caretRechecks.remove(editor)
     }
 
     @Suppress("ConstantConditionIf")
@@ -189,6 +189,9 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     }
 
     if (editor != null && languageId == null) {
+      if (editor is EditorImpl && !markupListeners.containsKey(editor))
+        EditorMarkupListener(editor)
+
       ApplicationManager.getApplication().invokeLater {
         removePreviousHighlights(editor)
         cleanUpStrayHighlights(editor)
@@ -211,6 +214,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val existingHighlighters = getHighlighters(editor)
 
     for (span in spans) {
+      val debug = span.ligature == "on" && span.elem.text == "Font" && count > 0
       val index = span.index % 2
       val foreground = span.color ?:
         getHighlightColors(span.elem, span.category, span.ligature,
@@ -225,9 +229,12 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         var needToAdd = true
         var newHighlight: RangeHighlighter? = null
         val highlightEnd = span.index + span.span
+        val style = if (foreground == null) BREAK_STYLE shl index else 0
 
         if (span.lastHighlighter != null) {
-          if (foreground != null && foreground == span.lastHighlighter?.textAttributes?.foregroundColor) {
+          val attrs = span.lastHighlighter?.textAttributes
+
+          if (attrs != null && foreground == attrs.foregroundColor && attrs.fontType == style) {
             needToAdd = false
             newHighlight = span.lastHighlighter!!
           }
@@ -236,8 +243,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         }
 
         if (needToAdd && highlightEnd < editor.document.textLength) {
-          val style = if (foreground == null) BREAK_STYLE shl index else 0
-
           newHighlight = markupModel.addRangeHighlighter(
             span.index, highlightEnd, MY_LIGATURE_LAYER,
             TextAttributes(foreground, null, null, EffectType.BOXED, style),
@@ -373,19 +378,18 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     highlightRechecks[editor]?.interrupt()
     highlightRechecks.remove(editor)
-    caretRechecks[editor]?.interrupt()
-    caretRechecks.remove(editor)
     currentFiles.remove(editor)
     cursorHighlighters.remove(editor)
     syntaxHighlighters.remove(editor)
+    markupListeners.remove(editor)
     editor.caretModel.removeCaretListener(this)
   }
 
   override fun caretPositionChanged(event: CaretEvent) {
-    highlightForCaret(event.editor, event.caret?.logicalPosition, 0)
+    highlightForCaret(event.editor, event.caret?.logicalPosition)
   }
 
-  private fun highlightForCaret(editor: Editor, pos: LogicalPosition?, count: Int = -1) {
+  private fun highlightForCaret(editor: Editor, pos: LogicalPosition?) {
     if (pos == null || editor !is EditorImpl)
       return
 
@@ -444,13 +448,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     if (newHighlights.size > 0)
       cursorHighlighters[editor] = newHighlights
-
-    if (count >= 0 && count < CARET_RECHECK_DELAYS.size && !caretRechecks.contains(editor)) {
-      val recheck = CaretRecheck(editor, pos, count)
-
-      caretRechecks[editor] = recheck
-      recheck.start()
-    }
   }
 
   @Nullable
@@ -554,10 +551,11 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     if (editor !is EditorImpl)
       return listOf()
 
-    val highlighters = arrayOf(*editor.markupModel.allHighlighters, *editor.filteredDocumentMarkupModel.allHighlighters)
+    val highlighters = mutableListOf(*editor.markupModel.allHighlighters, *editor.filteredDocumentMarkupModel.allHighlighters)
+    markupListeners[editor]?.getAccumulatedHighlighters()
 
     highlighters.sortWith(Comparator { a, b ->
-      if (a.startOffset != b.startOffset) a.startOffset - b.startOffset else b.endOffset - a.endOffset
+      if (a.startOffset != b.startOffset) a.startOffset - b.startOffset else a.endOffset - b.endOffset
     })
 
     return highlighters.filter { h -> !isMyLayer(h.layer) && h.layer < HighlighterLayer.HYPERLINK &&
@@ -707,23 +705,41 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     }
   }
 
-  inner class CaretRecheck(private var editor: Editor, private var pos: LogicalPosition, private var count: Int) :
-      Thread() {
-    override fun run() {
-      try {
-        sleep(CARET_RECHECK_DELAYS[count])
-      }
-      catch (e: InterruptedException) {
-        return
-      }
+  inner class EditorMarkupListener(private val editor: EditorImpl) : MarkupModelListener {
+    val trackedHighlighters = mutableSetOf<RangeHighlighterEx>()
 
-      ApplicationManager.getApplication().invokeLater {
-        if (caretRechecks.containsKey(editor)) {
-          caretRechecks.remove(editor)
-          highlightForCaret(editor, pos, count + 1)
-        }
-      }
+    init {
+      editor.markupModel.addMarkupModelListener({}, this)
+      editor.filteredDocumentMarkupModel.addMarkupModelListener({}, this)
+      markupListeners[editor] = this
     }
+
+    @Synchronized
+    override fun attributesChanged(highlighter: RangeHighlighterEx, renderersChanged: Boolean,
+        fontStyleOrColorChanged: Boolean) {
+    }
+
+    @Synchronized
+    override fun beforeRemoved(highlighter: RangeHighlighterEx) {
+      if (doICare(highlighter))
+        trackedHighlighters.remove(highlighter)
+    }
+
+    @Synchronized
+    override fun afterAdded(highlighter: RangeHighlighterEx) {
+      if (doICare(highlighter))
+        trackedHighlighters.add(highlighter)
+    }
+
+    @Synchronized
+    fun getAccumulatedHighlighters(): Array<RangeHighlighterEx> {
+      val highlights = trackedHighlighters.toTypedArray()
+      trackedHighlighters.clear()
+      return highlights
+    }
+
+    private fun doICare(highlighter: RangeHighlighterEx) = !isMyLayer(highlighter.layer) &&
+        highlighter.textAttributes?.foregroundColor != null
   }
 
   data class LigatureSpan (
@@ -758,22 +774,21 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       ElementCategory.NUMBER, ElementCategory.OPERATOR, ElementCategory.REGEXP, ElementCategory.STRING,
       ElementCategory.TEXT)
     private val HIGHLIGHT_RECHECK_DELAYS = arrayOf(500L, 500L, 500L, 1000L, 1000L, 1000L, 2000L, 3000L) // milliseconds
-    private val CARET_RECHECK_DELAYS = arrayOf(500L, 500L, 1000L, 1000L) // milliseconds
 
     private val NOTIFIER = NotificationGroup("Ligatures Limited", NotificationDisplayType.NONE, true)
 
     private val DEBUG_GREEN = Color(0x009900)
     private val DEBUG_RED = Color(0xDD0000)
-    private val currentEditors = HashMap<PsiFile, Editor>()
-    private val currentFiles = HashMap<Editor, PsiFile>()
-    private val cursorHighlighters = HashMap<Editor, List<RangeHighlighter>>()
-    private val syntaxHighlighters = HashMap<Editor, List<RangeHighlighter>>()
+    private val currentEditors = mutableMapOf<PsiFile, Editor>()
+    private val currentFiles = mutableMapOf<Editor, PsiFile>()
+    private val cursorHighlighters = mutableMapOf<Editor, List<RangeHighlighter>>()
+    private val syntaxHighlighters = mutableMapOf<Editor, List<RangeHighlighter>>()
+    private val markupListeners = mutableMapOf<Editor, EditorMarkupListener>()
     private val highlightRechecks = ConcurrentHashMap<Editor, HighlightRecheck>()
-    private val caretRechecks = ConcurrentHashMap<Editor, CaretRecheck>()
     private var nextLanguageId = 0
 
-    private val cachedColors: MutableMap<Color, Array<Color?>> = HashMap()
-    private val noColors = arrayOf<Color?>(null, null)
+    private val cachedColors = mutableMapOf<Color, Array<Color?>>()
+    private val NO_COLORS = arrayOf<Color?>(null, null)
 
     private val languageLookup = mutableMapOf<String, LanguageInfo>()
     private val languageIndexLookup = mutableMapOf<Int, LanguageInfo>()
@@ -814,7 +829,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     private fun getMatchingColors(color: Color?): Array<Color?> {
       if (color == null)
-        return noColors
+        return NO_COLORS
       else if (color === DONT_SUPPRESS)
         return arrayOf(DONT_SUPPRESS, DONT_SUPPRESS)
       else if (!cachedColors.containsKey(color)) {
