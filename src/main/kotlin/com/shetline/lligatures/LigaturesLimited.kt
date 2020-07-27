@@ -45,6 +45,7 @@ import org.jetbrains.annotations.Nullable
 import java.awt.Color
 import java.io.PrintWriter
 import java.io.StringWriter
+import java.util.concurrent.ConcurrentHashMap
 
 class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycleListener, HighlightVisitor,
     TextEditorHighlightingPassFactory, TextEditorHighlightingPassFactoryRegistrar, CaretListener,
@@ -61,8 +62,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   override fun suitableForFile(file: PsiFile): Boolean = true
 
   override fun analyze(
-      file: PsiFile, updateWholeFile: Boolean, holder: HighlightInfoHolder, action: Runnable
-  ): Boolean {
+      file: PsiFile, updateWholeFile: Boolean, holder: HighlightInfoHolder, action: Runnable): Boolean {
     action.run()
 
     try {
@@ -89,6 +89,11 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     if (languageInfo != null && languageInfo.syntaxHighlighter == null)
       languageInfo.syntaxHighlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(file.language,
         file.project, file.virtualFile)
+
+    if (editor != null) {
+      highlightRechecks[editor]?.interrupt()
+      highlightRechecks.remove(editor)
+    }
 
     @Suppress("ConstantConditionIf")
     if (debugCategories) {
@@ -201,7 +206,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   }
 
   private fun applyHighlighters(editor: Editor, syntaxHighlighter: SyntaxHighlighter,
-                                defaultForeground: Color, highlighters: ArrayList<LigatureHighlight>) {
+      defaultForeground: Color, highlighters: ArrayList<LigatureHighlight>, count: Int = 0) {
     if (editor !is EditorImpl || highlighters.isEmpty())
       return
 
@@ -264,6 +269,13 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     }
 
     syntaxHighlighters[editor] = newHighlights
+
+    if (count < HIGHLIGHT_RECHECK_DELAYS.size && !highlightRechecks.contains(editor)) {
+      val recheck = HighlightRecheck(editor, syntaxHighlighter, defaultForeground, highlighters, count)
+
+      highlightRechecks[editor] = recheck
+      recheck.start()
+    }
   }
 
   private fun getMatchingConfiguration(elem: PsiElement, inCategory: ElementCategory?, baseLanguage: String,
@@ -360,6 +372,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     if (currentFiles[editor] != null)
       currentEditors.remove(currentFiles[editor])
 
+    highlightRechecks[editor]?.interrupt()
+    highlightRechecks.remove(editor)
     currentFiles.remove(editor)
     cursorHighlighters.remove(editor)
     syntaxHighlighters.remove(editor)
@@ -656,6 +670,26 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     override fun doApplyInformationToEditor() {}
   }
 
+  inner class HighlightRecheck(private var editor: Editor, private var syntaxHighlighter: SyntaxHighlighter,
+      private var defaultForeground: Color, private var highlighters: ArrayList<LigatureHighlight>,
+      private var count: Int) : Thread() {
+    override fun run() {
+      try {
+        sleep(HIGHLIGHT_RECHECK_DELAYS[count])
+      }
+      catch (e: InterruptedException) {
+        return
+      }
+
+      ApplicationManager.getApplication().invokeLater {
+        if (highlightRechecks.containsKey(editor)) {
+          highlightRechecks.remove(editor)
+          applyHighlighters(editor, syntaxHighlighter, defaultForeground, highlighters, count)
+        }
+      }
+    }
+  }
+
   data class LigatureHighlight (
     var color: Color?,
     var elem: PsiElement,
@@ -687,6 +721,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       ElementCategory.BLOCK_COMMENT, ElementCategory.LINE_COMMENT, ElementCategory.STRING,
       ElementCategory.NAMED_OPERATOR, ElementCategory.NUMBER, ElementCategory.OPERATOR,
       ElementCategory.REGEXP, ElementCategory.STRING, ElementCategory.TEXT)
+    private val HIGHLIGHT_RECHECK_DELAYS = arrayOf(500L, 500L, 500L, 1000L, 1000L, 1000L, 2000L, 3000L) // milliseconds
 
     private val NOTIFIER = NotificationGroup("Ligatures Limited", NotificationDisplayType.NONE, true)
 
@@ -696,6 +731,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private val currentFiles = HashMap<Editor, PsiFile>()
     private val cursorHighlighters = HashMap<Editor, List<RangeHighlighter>>()
     private val syntaxHighlighters = HashMap<Editor, List<RangeHighlighter>>()
+    private val highlightRechecks = ConcurrentHashMap<Editor, HighlightRecheck>()
     private var nextLanguageId = 0
 
     private val cachedColors: MutableMap<Color, Array<Color?>> = HashMap()
