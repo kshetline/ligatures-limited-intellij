@@ -185,7 +185,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     if (editor != null && languageId == null) {
       if (editor is EditorImpl && !markupListeners.containsKey(editor))
-        EditorMarkupListener(file, editor) // TODO
+        EditorMarkupListener(file, editor)
 
       ApplicationManager.getApplication().invokeLater {
         removePreviousHighlights(editor)
@@ -211,7 +211,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val existingHighlighters = getHighlighters(editor)
 
     for (span in spans) {
-      val debug = span.ligature == "on" && span.elem.text == "Font"
       val index = span.index % 2
       val foreground = span.color ?:
         getHighlightColors(span.elem, span.category, span.ligature,
@@ -693,7 +692,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         fontStyleOrColorChanged: Boolean) {
       if (doICare(highlighter)) {
         trackedHighlighters.add(highlighter)
-        notify("modified ${trackedHighlighters.size}", NotificationType.INFORMATION)
         checkUpdater()
       }
     }
@@ -702,7 +700,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     override fun beforeRemoved(highlighter: RangeHighlighterEx) {
       if (doICare(highlighter)) {
         trackedHighlighters.remove(highlighter)
-        notify("remove ${trackedHighlighters.size}", NotificationType.INFORMATION)
         checkUpdater()
       }
     }
@@ -711,7 +708,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     override fun afterAdded(highlighter: RangeHighlighterEx) {
       if (doICare(highlighter)) {
         trackedHighlighters.add(highlighter)
-        notify("add ${trackedHighlighters.size}", NotificationType.INFORMATION)
         checkUpdater()
       }
     }
@@ -719,7 +715,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     @Synchronized
     fun clearAccumulatedHighlighters() {
       trackedHighlighters.clear()
-      notify("cleared", NotificationType.INFORMATION)
       checkUpdater()
     }
 
@@ -727,22 +722,21 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       if (trackedHighlighters.size > 0 && updater == null) {
         updater = Thread {
           try {
-            sleep(500)
+            sleep(UPDATE_DEBOUNCE)
           }
           catch (e: InterruptedException) {
-            notify("interrupted", NotificationType.INFORMATION)
             return@Thread
           }
+          finally {
+            updater = null
+          }
 
-          notify("invokeLater", NotificationType.INFORMATION)
           ApplicationManager.getApplication().invokeLater @Synchronized {
-            notify("invoked", NotificationType.INFORMATION)
             if (trackedHighlighters.size > 0 && _spans != null) {
               val syntaxHighlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(file.language, file.project,
                 file.virtualFile)
               val defaultForeground = EditorColorsManager.getInstance().globalScheme.defaultForeground
 
-              notify("doing update", NotificationType.INFORMATION)
               applyLigatureSpans(editor, syntaxHighlighter, defaultForeground, _spans!!)
             }
           }
@@ -784,6 +778,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private const val MY_SELECTION_LAYER = HighlighterLayer.HYPERLINK - 1
     private const val STYLE_MASK = 0x3
     private const val BREAK_STYLE = 0x4 // A fake font style one bit position higher than BOLD or ITALIC
+    private const val UPDATE_DEBOUNCE = 500L
+
     private val DONT_SUPPRESS = LLColor(0x808080)
     private val PROBABLY_SAFE_WITH_LEXER_COLOR = setOf(
       ElementCategory.BLOCK_COMMENT, ElementCategory.LINE_COMMENT, ElementCategory.STRING,
