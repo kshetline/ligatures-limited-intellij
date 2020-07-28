@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.shetline"
-version = "0.0.5-alpha"
+version = "1.0.0"
 
 repositories {
   mavenCentral()
@@ -40,16 +40,9 @@ tasks {
 }
 
 tasks.getByName<org.jetbrains.intellij.tasks.PatchPluginXmlTask>("patchPluginXml") {
-  changeNotes(
-    """
-      <h2>0.0.5</h2>
-      <ul>
-        <li>Fix start-up crash when Markdown language isn't found.</li>
-        <li>Fix vendor home link.</li>
-      </ul>
-      <h2>0.0.4</h2>
-      <ul><li>Description update</li></ul>
-      <h2>0.0.1</h2>
-      <ul><li>First release</li></ul>"""
+  changeNotes("""
+      <h2>1.0.0</h2>
+      <ul><li>First stable release</li></ul>
+"""
   )
 }

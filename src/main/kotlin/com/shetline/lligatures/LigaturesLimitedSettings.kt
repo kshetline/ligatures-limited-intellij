@@ -38,6 +38,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
       extSettingsState.config = parseJson(settingsState.json)
     }
     catch (e: Exception) {
+      LigaturesLimited.notify("Reverting to default settings due to invalid saved configuration: ${e.message}")
       settingsState.json = defaultJson
       extSettingsState.config = parseJson(settingsState.json)
     }
@@ -205,7 +206,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
       set.remove("-")
     }
 
-    set.forEach { c -> klass += escapeForRegex(c) }
+    set.forEach { klass += escapeForRegex(it) }
 
     return "$klass]"
   }

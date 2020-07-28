@@ -19,7 +19,9 @@
       you're doing as you type. Optionally this can be done for all ligatures on the currently-edited line.</p>
     <br>
     <p>This plugin works automatically as soon as it is installed and enabled. See the control panel in
-      Settings/Preferences → Editor → Ligatures Limited to change options and configuration.</p>
+      Settings/Preferences → Editor → Ligatures Limited to change options and configuration. Also make
+      sure in Settings/Preferences → Editor → Font that a ligature font has been selected, and
+      “Enable font ligatures” is checked.</p>
     ]]></description>
 
   <depends>com.intellij.modules.lang</depends>

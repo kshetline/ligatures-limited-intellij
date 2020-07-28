@@ -1,0 +1,6 @@
+/* <= => != */
+.foo::after {
+  color: papayawhip;
+  font-family: "Open Sans", OpenSans2, "Helvetica Neue", sans-serif;
+  width: fit-content;
+}
