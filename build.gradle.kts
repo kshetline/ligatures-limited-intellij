@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.shetline"
-version = "1.0.1"
+version = "1.0.2"
 
 repositories {
   mavenCentral()
@@ -39,12 +39,10 @@ tasks {
   }
 }
 
-tasks.withType<Jar> {
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
-}
-
 tasks.getByName<org.jetbrains.intellij.tasks.PatchPluginXmlTask>("patchPluginXml") {
   changeNotes("""
+      <h2>1.0.1, 1.0.2</h2>
+      <ul><li>Updates for compatibility with various versions of IDEA</li></ul>
       <h2>1.0.0</h2>
       <ul><li>First stable release</li></ul>
 """
