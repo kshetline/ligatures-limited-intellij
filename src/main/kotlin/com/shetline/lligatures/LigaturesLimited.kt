@@ -539,7 +539,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       return listOf()
 
     val highlighters = mutableListOf(*editor.markupModel.allHighlighters, *editor.filteredDocumentMarkupModel.allHighlighters)
-    markupListeners[editor]?.clearAccumulatedHighlighters()
+
+    markupListeners[editor]?.clearAccumulatedChanges()
 
     highlighters.sortWith(Comparator { a, b ->
       if (a.startOffset != b.startOffset) a.startOffset - b.startOffset else a.endOffset - b.endOffset
@@ -673,7 +674,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   }
 
   inner class EditorMarkupListener(private val file: PsiFile, private val editor: EditorImpl) : MarkupModelListener {
-    private val trackedHighlighters = mutableSetOf<RangeHighlighterEx>()
+    private var changes = 0
     private var updater: Thread? = null
     private var _spans: ArrayList<LigatureSpan>? = null
 
@@ -690,36 +691,28 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     @Synchronized
     override fun attributesChanged(highlighter: RangeHighlighterEx, renderersChanged: Boolean,
         fontStyleOrColorChanged: Boolean) {
-      if (doICare(highlighter)) {
-        trackedHighlighters.add(highlighter)
+      if (doICare(highlighter) || renderersChanged || fontStyleOrColorChanged) {
+        ++changes
         checkUpdater()
       }
     }
 
-    @Synchronized
     override fun beforeRemoved(highlighter: RangeHighlighterEx) {
-      if (doICare(highlighter)) {
-        trackedHighlighters.remove(highlighter)
-        checkUpdater()
-      }
+      attributesChanged(highlighter, renderersChanged = false, fontStyleOrColorChanged = false)
     }
 
-    @Synchronized
     override fun afterAdded(highlighter: RangeHighlighterEx) {
-      if (doICare(highlighter)) {
-        trackedHighlighters.add(highlighter)
-        checkUpdater()
-      }
+      attributesChanged(highlighter, renderersChanged = false, fontStyleOrColorChanged = false)
     }
 
     @Synchronized
-    fun clearAccumulatedHighlighters() {
-      trackedHighlighters.clear()
+    fun clearAccumulatedChanges() {
+      changes = 0
       checkUpdater()
     }
 
     private fun checkUpdater() {
-      if (trackedHighlighters.size > 0 && updater == null) {
+      if (changes > 0 && updater == null) {
         updater = Thread {
           try {
             sleep(UPDATE_DEBOUNCE)
@@ -732,19 +725,20 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
           }
 
           ApplicationManager.getApplication().invokeLater @Synchronized {
-            if (trackedHighlighters.size > 0 && _spans != null) {
+            if (changes > 0 && _spans != null) {
               val syntaxHighlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(file.language, file.project,
                 file.virtualFile)
               val defaultForeground = EditorColorsManager.getInstance().globalScheme.defaultForeground
 
               applyLigatureSpans(editor, syntaxHighlighter, defaultForeground, _spans!!)
+              highlightForCaret(editor, editor.caretModel.logicalPosition)
             }
           }
         }
 
         updater!!.start()
       }
-      else if (trackedHighlighters.size == 0 && updater != null)
+      else if (changes == 0 && updater != null)
         updater!!.interrupt()
     }
 
