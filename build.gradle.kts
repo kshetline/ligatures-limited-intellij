@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.shetline"
-version = "1.0.0"
+version = "1.0.1"
 
 repositories {
   mavenCentral()
@@ -37,6 +37,10 @@ tasks {
     kotlinOptions.jvmTarget = "1.8"
     kotlinOptions.freeCompilerArgs = listOf("-Xjvm-default=enable")
   }
+}
+
+tasks.withType<Jar> {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
 }
 
 tasks.getByName<org.jetbrains.intellij.tasks.PatchPluginXmlTask>("patchPluginXml") {

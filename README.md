@@ -4,11 +4,11 @@
 
 > Note: This early release is almost certain to have a few lurking bugs. Please don’t be shy about reporting bugs back to me. The most likely bugs will involve handling of ligatures in programming languages I don’t commonly use myself.
 
-I enjoy using ligature fonts for coding so that symbols like arrows (<img src="https://shetline.com/readme/ligatures-limited-ij/v0.0.1/fat_arrow_nolig.png" width="16" height="14" align="absmiddle" style="display: inline-block; position: relative; top: -0.075em" alt="fat arrow no ligature">) look like arrows (<img src="https://shetline.com/readme/ligatures-limited-ij/v0.0.1/fat_arrow.png" width="17" height="14" align="absmiddle" style="display: inline-block; position: relative; top: -0.075em" alt="fat arrow ligature">) and does-not-equal signs (<img src="https://shetline.com/readme/ligatures-limited-ij/v0.0.1/not_equal_nolig.png" width="17" height="14" align="absmiddle" style="display: inline-block; position: relative; top: -0.075em" alt="not-equal no ligature">) look like the real thing from math class (<img src="https://shetline.com/readme/ligatures-limited-ij/v0.0.1/not_equal.png" width="17" height="14" align="absmiddle" style="display: inline-block; position: relative; top: -0.075em" alt="not-equal ligature">). The problem is that, even with the contextual smarts built into ligature fonts like Fira Code, ligatures have a knack of popping up where you don’t want them.
+I enjoy using ligature fonts for coding so that symbols like arrows (<img src="https://shetline.com/readme/ligatures-limited-ij/v1.0.1/fat_arrow_nolig.png" width="16" height="14" align="absmiddle" style="display: inline-block; position: relative; top: -0.075em" alt="fat arrow no ligature">) look like arrows (<img src="https://shetline.com/readme/ligatures-limited-ij/v1.0.1/fat_arrow.png" width="17" height="14" align="absmiddle" style="display: inline-block; position: relative; top: -0.075em" alt="fat arrow ligature">) and does-not-equal signs (<img src="https://shetline.com/readme/ligatures-limited-ij/v1.0.1/not_equal_nolig.png" width="17" height="14" align="absmiddle" style="display: inline-block; position: relative; top: -0.075em" alt="not-equal no ligature">) look like the real thing from math class (<img src="https://shetline.com/readme/ligatures-limited-ij/v1.0.1/not_equal.png" width="17" height="14" align="absmiddle" style="display: inline-block; position: relative; top: -0.075em" alt="not-equal ligature">). The problem is that, even with the contextual smarts built into ligature fonts like Fira Code, ligatures have a knack of popping up where you don’t want them.
 
-<img src="https://shetline.com/readme/ligatures-limited-ij/v0.0.1/without_suppressed_ligatures.jpg" width="407" height="67" alt="Without ligature suppression">
+<img src="https://shetline.com/readme/ligatures-limited-ij/v1.0.1/without_suppressed_ligatures.jpg" width="407" height="67" alt="Without ligature suppression">
 <br>
-<img src="https://shetline.com/readme/ligatures-limited-ij/v0.0.1/with_suppressed_ligatures.jpg" width="407" height="67" alt="With ligature suppression">
+<img src="https://shetline.com/readme/ligatures-limited-ij/v1.0.1/with_suppressed_ligatures.jpg" width="407" height="67" alt="With ligature suppression">
 
 *Ligatures Limited* is designed to make the rendering of ligatures more context-dependent.
 
@@ -16,7 +16,7 @@ In the top image, you can see ligatures that don’t make sense where they are �
 
 The image below shows how those out-of-place ligatures are suppressed by *Ligatures Limited*, replaced with individual characters, while the triple-equals and double-ampersand ligatures are retained.
 
-With the default settings for this plugin ligatures are only rendered in three contexts: _operators_, _punctuation_, and _comment markers_, plus three special cases: <img src="https://shetline.com/readme/ligatures-limited-ij/v0.0.1/0x_nolig.png" width="16" height="14" align="absmiddle" style="display: inline-block; position: relative; top: -0.075em" alt="0x ligature"> when followed by a hexadecimal digit in a numeric context, rendered as `0×` (if supported by your chosen font), and a similar pattern, `0o7` for octal numbers, and `0b1` for binary numbers as well.
+With the default settings for this plugin ligatures are only rendered in three contexts: _operators_, _punctuation_, and _comment markers_, plus three special cases: <img src="https://shetline.com/readme/ligatures-limited-ij/v1.0.1/0x_nolig.png" width="16" height="14" align="absmiddle" style="display: inline-block; position: relative; top: -0.075em" alt="0x ligature"> when followed by a hexadecimal digit in a numeric context, rendered as `0×` (if supported by your chosen font), and a similar pattern, `0o7` for octal numbers, and `0b1` for binary numbers as well.
 
 Also, by default, the special case of `x` between any two decimal digits is suppressed, which would render as (for example) `2×4`. If you want to see these ligatures rendered in any or all contexts, (provided, of course, that your chosen font defines them), you must expressly enable them.
 
@@ -33,12 +33,12 @@ In order to take advantage of *Ligatures Limited*, you must first select a ligat
 ## Ligatures handled by *Ligatures Limited*
 
 As rendered using Fira Code:<br>
-<img src="https://shetline.com/readme/ligatures-limited-ij/v0.0.1/ligature_set.jpg" width="763" height="136" alt="Supported ligatures">
+<img src="https://shetline.com/readme/ligatures-limited-ij/v1.0.1/ligature_set.jpg" width="763" height="136" alt="Supported ligatures">
 
 Fira Code again, but with all ligatures suppressed:<br>
-<img src="https://shetline.com/readme/ligatures-limited-ij/v0.0.1/ligature_set_suppressed.jpg" width="763" height="136" alt="Supported ligatures as individual characters">
+<img src="https://shetline.com/readme/ligatures-limited-ij/v1.0.1/ligature_set_suppressed.jpg" width="763" height="136" alt="Supported ligatures as individual characters">
 
- <img src="https://shetline.com/readme/ligatures-limited-ij/v0.0.1/0xF_nolig.png" width="24" height="14" align="absmiddle" style="display: inline-block; position: relative; top: -0.075em" alt="0xF ligature"> represents `0x` followed by any hexadecimal digit, and <img src="https://shetline.com/readme/ligatures-limited-ij/v0.0.1/9x9_nolig.png" width="24" height="14" align="absmiddle" style="display: inline-block; position: relative; top: -0.075em" alt="9x9 ligature"> represents `x` surrounded by any decimal digits. You can specify your own additional ligatures if you need _Ligatures Limited_ to be aware of them.
+ <img src="https://shetline.com/readme/ligatures-limited-ij/v1.0.1/0xF_nolig.png" width="24" height="14" align="absmiddle" style="display: inline-block; position: relative; top: -0.075em" alt="0xF ligature"> represents `0x` followed by any hexadecimal digit, and <img src="https://shetline.com/readme/ligatures-limited-ij/v1.0.1/9x9_nolig.png" width="24" height="14" align="absmiddle" style="display: inline-block; position: relative; top: -0.075em" alt="9x9 ligature"> represents `x` surrounded by any decimal digits. You can specify your own additional ligatures if you need _Ligatures Limited_ to be aware of them.
 
 The bottom row are indefinite-width ligatures. When specifying these ligatures, _three_ equals signs (`=`), dashes (`-`), or tildes (`~`) represent three *or more* of those signs, except for the first three ligatures, where _four_ equals signs represent four or more.
 

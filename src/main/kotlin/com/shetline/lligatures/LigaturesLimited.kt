@@ -42,6 +42,7 @@ import com.intellij.psi.PsiFile
 import com.intellij.psi.tree.IElementType
 import com.intellij.psi.util.elementType
 import com.intellij.util.xmlb.XmlSerializerUtil.copyBean
+import com.jetbrains.rd.util.printlnError
 import com.shetline.lligatures.LigaturesLimitedSettings.CursorMode
 import org.jetbrains.annotations.Nullable
 import java.awt.Color
@@ -94,6 +95,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     @Suppress("ConstantConditionIf")
     if (debugCategories) {
+      notifyInfo("list element categories")
       var index = 0
 
       while (index < text.length) {
@@ -779,7 +781,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       ElementCategory.BLOCK_COMMENT, ElementCategory.LINE_COMMENT, ElementCategory.STRING,
       ElementCategory.NUMBER, ElementCategory.OPERATOR, ElementCategory.REGEXP, ElementCategory.STRING,
       ElementCategory.TEXT)
-    private val NOTIFIER = NotificationGroup("Ligatures Limited", NotificationDisplayType.NONE, true)
 
     private val DEBUG_GREEN = Color(0x009900)
     private val DEBUG_RED = Color(0xDD0000)
@@ -789,6 +790,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private val syntaxHighlighters = mutableMapOf<Editor, List<RangeHighlighter>>()
     private val markupListeners = mutableMapOf<Editor, EditorMarkupListener>()
     private var nextLanguageId = 0
+    private var notifier: NotificationGroup? = null
 
     private val cachedColors = mutableMapOf<Color, Array<Color?>>()
     private val NO_COLORS = arrayOf<Color?>(null, null)
@@ -801,6 +803,19 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       sqlite, svg, text, typescript, typescript_jsx, xhtml, xml, yaml""".trim().split(Regex("""\s*,\s*""")).toSet()
 
     init {
+      // For some reason simply using NotificationGroup("Ligatures Limited", NotificationDisplayType.NONE, true)
+      //   did not pass an IntelliJ compatibility test for IU-193.7288.26 although that constructor runs perfectly
+      //   well with IU-193.7288.26, and produces no warnings for later versions of IDEA.
+      try {
+        val constructor = (NotificationGroup::class.java).getConstructor(String::class.java,
+            NotificationDisplayType::class.java, Boolean::class.java)
+
+        notifier = constructor.newInstance("Ligatures Limited", NotificationDisplayType.NONE, true)
+      }
+      catch (e: Exception) {
+        printlnError("Ligatures Limited: Failed to create NotificationGroup: ${e.message}")
+      }
+
       for (language in LanguageUtil.getFileLanguages()) {
         val li = LanguageInfo(language, ++nextLanguageId)
         val id = language.idLc
@@ -814,9 +829,10 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       return layer == MY_LIGATURE_LAYER || layer == MY_LIGATURE_BACKGROUND_LAYER || layer == MY_SELECTION_LAYER
     }
 
+    fun notifyInfo(message: String) = notify(message, NotificationType.INFORMATION)
     fun notify(message: String, notificationType: NotificationType = NotificationType.ERROR) {
-      println("$notificationType: $message")
-      NOTIFIER.createNotification(message, notificationType).notify(null)
+      println("Ligatures Limited - $notificationType: $message")
+      notifier?.createNotification(message, notificationType)?.notify(null)
     }
 
     private fun stackTraceAsString(t: Throwable): String {
