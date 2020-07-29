@@ -12,15 +12,13 @@ import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.notification.NotificationDisplayType
 import com.intellij.notification.NotificationGroup
 import com.intellij.notification.NotificationType
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.LogicalPosition
-import com.intellij.openapi.editor.colors.CodeInsightColors
-import com.intellij.openapi.editor.colors.EditorColorsManager
-import com.intellij.openapi.editor.colors.TextAttributesKey
-import com.intellij.openapi.editor.colors.TextAttributesScheme
+import com.intellij.openapi.editor.colors.*
 import com.intellij.openapi.editor.event.CaretEvent
 import com.intellij.openapi.editor.event.CaretListener
 import com.intellij.openapi.editor.event.EditorFactoryEvent
@@ -49,17 +47,21 @@ import java.awt.Color
 import java.io.PrintWriter
 import java.io.StringWriter
 import java.lang.Thread.sleep
+import java.lang.reflect.Method
 
 class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycleListener, HighlightVisitor,
     TextEditorHighlightingPassFactory, TextEditorHighlightingPassFactoryRegistrar, CaretListener,
-    EditorFactoryListener {
+    EditorFactoryListener, Disposable {
   private val settings = LigaturesLimitedSettings.instance
   private val debugCategories = false
   private val infoType = HighlightInfoType.HighlightInfoTypeImpl(HighlightSeverity("MARKER", 1),
     CodeInsightColors.INFORMATION_ATTRIBUTES)
 
   override fun appFrameCreated(commandLineArgs: MutableList<String>) {
-    EditorFactory.getInstance().addEditorFactoryListener(this, ApplicationManager.getApplication())
+    EditorFactory.getInstance().addEditorFactoryListener(this, this)
+  }
+
+  override fun dispose() {
   }
 
   override fun suitableForFile(file: PsiFile): Boolean = true
@@ -230,7 +232,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         val style = if (foreground == null) BREAK_STYLE shl index else 0
 
         if (span.lastHighlighter != null) {
-          val attrs = span.lastHighlighter?.textAttributes
+          val attrs = span.lastHighlighter?.textAttrs(editor.colorsScheme)
 
           if (attrs != null && foreground == attrs.foregroundColor && attrs.fontType == style) {
             needToAdd = false
@@ -466,12 +468,13 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         val highlighter = highlighters[i]
 
         if (highlighter.startOffset <= startOffset && endOffset <= highlighter.endOffset) {
-          style = style or (highlighter.textAttributes!!.fontType and STYLE_MASK)
+          val attrs = highlighter.textAttrs(colorsScheme)
+          val specificColor = attrs!!.foregroundColor
 
-          val specificColor = highlighter.textAttributes!!.foregroundColor
+          style = style or (attrs.fontType and STYLE_MASK)
 
           if (specificColor == null) {
-            val (languageId, elemType) = getLanguageHints(highlighter.textAttributes)!!
+            val (languageId, elemType) = getLanguageHints(attrs)!!
             val languageInfo = languageLookup[languageId]
 
             hintType = elemType
@@ -548,8 +551,12 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       if (a.startOffset != b.startOffset) a.startOffset - b.startOffset else a.endOffset - b.endOffset
     })
 
-    return highlighters.filter { h -> !isMyLayer(h.layer) && h.layer < HighlighterLayer.HYPERLINK &&
-        (h.textAttributes?.foregroundColor != null || getLanguageHints(h.textAttributes) != null) }
+    return highlighters.filter {
+      val attrs = it.textAttrs(editor.colorsScheme)
+
+      !isMyLayer(it.layer) && it.layer < HighlighterLayer.HYPERLINK &&
+      (attrs?.foregroundColor != null || getLanguageHints(attrs) != null)
+    }
   }
 
   private fun removePreviousHighlights(editor: Editor?) {
@@ -572,8 +579,11 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       if (a.startOffset != b.startOffset) a.startOffset - b.startOffset else b.endOffset - a.endOffset
     })
 
-    val strays = highlighters.filter { h -> isMyLayer(h.layer) &&
-        (h.textAttributes?.foregroundColor is LLColor || (h.textAttributes?.fontType ?: 0) >= BREAK_STYLE) }
+    val strays = highlighters.filter {
+      val attrs = it.textAttrs(editor.colorsScheme)
+
+      isMyLayer(it.layer) && (attrs?.foregroundColor is LLColor || (attrs?.fontType ?: 0) >= BREAK_STYLE)
+    }
 
     strays.forEach { editor.filteredDocumentMarkupModel.removeHighlighter(it) }
   }
@@ -745,7 +755,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     }
 
     private fun doICare(highlighter: RangeHighlighterEx) = !isMyLayer(highlighter.layer) &&
-        highlighter.textAttributes?.foregroundColor != null
+        highlighter.textAttrs(editor.colorsScheme)?.foregroundColor != null
   }
 
   data class LigatureSpan (
@@ -791,6 +801,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private val markupListeners = mutableMapOf<Editor, EditorMarkupListener>()
     private var nextLanguageId = 0
     private var notifier: NotificationGroup? = null
+    private var getTextAttrsMethod: Method
 
     private val cachedColors = mutableMapOf<Color, Array<Color?>>()
     private val NO_COLORS = arrayOf<Color?>(null, null)
@@ -807,13 +818,23 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       //   did not pass an IntelliJ compatibility test for IU-193.7288.26 although that constructor runs perfectly
       //   well with IU-193.7288.26, and produces no warnings for later versions of IDEA.
       try {
-        val constructor = (NotificationGroup::class.java).getConstructor(String::class.java,
+        val constructor = NotificationGroup::class.java.getConstructor(String::class.java,
             NotificationDisplayType::class.java, Boolean::class.java)
 
         notifier = constructor.newInstance("Ligatures Limited", NotificationDisplayType.NONE, true)
       }
       catch (e: Exception) {
         printlnError("Ligatures Limited: Failed to create NotificationGroup: ${e.message}")
+      }
+
+      // getTextAttributes() [In Kotlin, .textAttributes] is deprecated in IDEA 2020.2, but the non-deprecated
+      // replacement doesn't exist before 2020.2, so only by using reflection can I get rid of deprecation warnings,
+      // use the new API when available, and not give up pre-2020.2 compatibility.
+      getTextAttrsMethod = try {
+        RangeHighlighter::class.java.getMethod("getTextAttributes", EditorColorsScheme::class.java)
+      }
+      catch (e: NoSuchMethodException) {
+        RangeHighlighter::class.java.getMethod("getTextAttributes")
       }
 
       for (language in LanguageUtil.getFileLanguages()) {
@@ -873,6 +894,13 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         newId = newId.replace(Regex("""ecma.?script.*"""), "javascript")
 
       return newId
+    }
+
+    fun RangeHighlighter.textAttrs(scheme: TextAttributesScheme): TextAttributes? {
+      return if (getTextAttrsMethod.parameterCount == 1)
+        getTextAttrsMethod.invoke(this, scheme) as TextAttributes?
+      else
+        getTextAttrsMethod.invoke(this) as TextAttributes?
     }
 
     val Language.idNormalized get(): String = normalizeLanguageId(this.id, true)

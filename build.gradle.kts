@@ -19,7 +19,7 @@ dependencies {
 }
 
 intellij {
-  version = "IC-2020.1.2"
+  version = "IC-2020.2"
   updateSinceUntilBuild = false
 }
 
