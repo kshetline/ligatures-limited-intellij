@@ -19,7 +19,7 @@ dependencies {
 }
 
 intellij {
-  version = "IC-2020.1.2"
+  version = "IC-2020.2"
   updateSinceUntilBuild = false
 }
 
@@ -37,6 +37,10 @@ tasks {
     kotlinOptions.jvmTarget = "1.8"
     kotlinOptions.freeCompilerArgs = listOf("-Xjvm-default=enable")
   }
+}
+
+tasks.withType<Jar> {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
 }
 
 tasks.getByName<org.jetbrains.intellij.tasks.PatchPluginXmlTask>("patchPluginXml") {
