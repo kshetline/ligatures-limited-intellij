@@ -803,7 +803,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       sqlite, svg, text, typescript, typescript_jsx, xhtml, xml, yaml""".trim().split(Regex("""\s*,\s*""")).toSet()
 
     init {
-      // For some reason simply using NotificationGroup("Ligatures Limited", NotificationDisplayType.NONE, true)
+      // For some reason simply using `NotificationGroup("Ligatures Limited", NotificationDisplayType.NONE, true)`
       //   did not pass an IntelliJ compatibility test for IU-193.7288.26 although that constructor runs perfectly
       //   well with IU-193.7288.26, and produces no warnings for later versions of IDEA.
       try {
