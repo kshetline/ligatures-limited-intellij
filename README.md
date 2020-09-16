@@ -40,7 +40,7 @@ Fira Code again, but with all ligatures suppressed:<br>
 
  <img src="https://shetline.com/readme/ligatures-limited-ij/v1.0.1/0xF_nolig.png" width="24" height="14" align="absmiddle" style="display: inline-block; position: relative; top: -0.075em" alt="0xF ligature"> represents `0x` followed by any hexadecimal digit, and <img src="https://shetline.com/readme/ligatures-limited-ij/v1.0.1/9x9_nolig.png" width="24" height="14" align="absmiddle" style="display: inline-block; position: relative; top: -0.075em" alt="9x9 ligature"> represents `x` surrounded by any decimal digits. You can specify your own additional ligatures if you need _Ligatures Limited_ to be aware of them.
 
-The bottom row are indefinite-width ligatures. When specifying these ligatures, _three_ equals signs (`=`), dashes (`-`), or tildes (`~`) represent three *or more* of those signs, except for the first three ligatures, where _four_ equals signs represent four or more.
+The bottom row are indefinite-width ligatures. When specifying these ligatures, _three_ equals signs (`=`), dashes (`-`), or tildes (`~`) represent three *or more* of those signs, except for the first three ligatures, where _four_ equals signs represent four or more. Four or more dashes, without a leading `<` or trailing `>`, is also a special case, represented by four dashes.
 
 `####` is another indefinite-width ligature, representing four or more number signs (`#`) in a row.
 

@@ -93,7 +93,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
   ;; :: ::: .. ... ..< !! ?? %% && <:< || ?. ?: ++ +++ -- --- ** *** ~= ~- www ff fi fl ffi ffl
   -~ ~@ ^= ?= /= /== |= ||= #! ## ### #### #{ #[ ]# #( #? #_ #: #= #_( #{} =~ !~ 9x9 0xF 0o7 0b1
   |- |-- -| --| |== =| ==| /==/ ==/ /=/ <~~> =>= =<= :>: :<: /\ \/ _|_ ||- :< >: ::=
-  <==== ==== ====> <====> <--- ---> <---> |--- ---| |=== ===| /=== ===/ <~~~ ~~~> <~~~>
+  <==== ==== ====> <====> <--- ---- ---> <---> |--- ---| |=== ===| /=== ===/ <~~~ ~~~> <~~~>
 
 """).trim().split(Regex("""\s+"""))
 
@@ -105,6 +105,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
     "====>"  to /* language=regexp */ "={4,}>",
     "<====>" to /* language=regexp */ "<={4,}>",
     "<---"   to /* language=regexp */ "<-{3,}",
+    "----"   to /* language=regexp */ "-{4,}",
     "--->"   to /* language=regexp */ "-{3,}>",
     "<--->"  to /* language=regexp */ "<-{3,}>",
     "|---"   to /* language=regexp */ "\\|-{3,}",
