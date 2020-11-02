@@ -86,6 +86,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   override fun visit(elem: PsiElement) {}
 
   private fun searchForLigatures(file: PsiFile, holder: HighlightInfoHolder) {
+    checkAvailableLanguages()
+
     val text = file.text
     val languageId = if (file.context != null) file.language.idNormalized else null
     val languageInfo = if (languageId != null) languageLookup[languageId] else null
@@ -806,6 +808,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private val cachedColors = mutableMapOf<Color, Array<Color?>>()
     private val NO_COLORS = arrayOf<Color?>(null, null)
 
+    private var languagesChecked = false
     private val languageLookup = mutableMapOf<String, LanguageInfo>()
     private val languageIndexLookup = mutableMapOf<Int, LanguageInfo>()
     private val cannedLanguageList = """
@@ -837,13 +840,25 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         RangeHighlighter::class.java.getMethod("getTextAttributes")
       }
 
-      for (language in LanguageUtil.getFileLanguages()) {
-        val li = LanguageInfo(language, ++nextLanguageId)
-        val id = language.idLc
+      checkAvailableLanguages()
+    }
 
-        languageLookup[id] = li
-        languageIndexLookup[nextLanguageId] = li
+    private fun checkAvailableLanguages() {
+      if (languagesChecked)
+        return
+
+      try {
+        for (language in LanguageUtil.getFileLanguages()) {
+          val li = LanguageInfo(language, ++nextLanguageId)
+          val id = language.idLc
+
+          languageLookup[id] = li
+          languageIndexLookup[nextLanguageId] = li
+        }
+
+        languagesChecked = true
       }
+      catch (e: Exception) { }
     }
 
     private fun isMyLayer(layer: Int): Boolean {
@@ -864,8 +879,11 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       return sw.toString()
     }
 
-    fun hasLanguage(idNormalized: String) =
-      cannedLanguageList.contains(idNormalized) || languageLookup.containsKey(idNormalized)
+    fun hasLanguage(idNormalized: String): Boolean {
+      checkAvailableLanguages()
+
+      return cannedLanguageList.contains(idNormalized) || languageLookup.containsKey(idNormalized)
+    }
 
     private fun getMatchingColors(color: Color?): Array<Color?> {
       if (color == null)
