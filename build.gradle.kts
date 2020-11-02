@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.shetline"
-version = "1.0.1"
+version = "1.0.2"
 
 repositories {
   mavenCentral()
@@ -45,6 +45,8 @@ tasks.withType<Jar> {
 
 tasks.getByName<org.jetbrains.intellij.tasks.PatchPluginXmlTask>("patchPluginXml") {
   changeNotes("""
+      <h2>1.0.2</h2>
+      <ul><li>Fix bug where extension would fail to start when currently available languages could not be checked.</ul>
       <h2>1.0.1</h2>
       <ul><li>Recognize as a ligature four or more dashes, by themselves, without a leading <b>&lt;</b> or trailing <b>&gt;</b>.</ul>
       <h2>1.0.0</h2>
