@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.shetline"
-version = "1.0.2"
+version = "1.0.3"
 
 repositories {
   mavenCentral()
@@ -19,7 +19,7 @@ dependencies {
 }
 
 intellij {
-  version = "IC-2020.2"
+  version = "IC-2020.3.2"
   updateSinceUntilBuild = false
 }
 
@@ -45,6 +45,8 @@ tasks.withType<Jar> {
 
 tasks.getByName<org.jetbrains.intellij.tasks.PatchPluginXmlTask>("patchPluginXml") {
   changeNotes("""
+      <h2>1.0.3</h2>
+      <ul><li>Fix handling of cursor position when tab characters are used for indentation.</ul>
       <h2>1.0.2</h2>
       <ul><li>Fix bug where extension would fail to start when currently available languages could not be checked.</ul>
       <h2>1.0.1</h2>
