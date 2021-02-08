@@ -202,7 +202,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
           applyLigatureSpans(editor, syntaxHighlighter, defaultForeground, newSpans)
         }
 
-        highlightForCaret(editor, editor.caretModel.logicalPosition)
+        highlightForCaret(editor, editor.caretModel.logicalPosition, editor.caretModel.offset)
       }
     }
   }
@@ -379,11 +379,11 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   }
 
   override fun caretPositionChanged(event: CaretEvent) {
-    highlightForCaret(event.editor, event.caret?.logicalPosition)
+    highlightForCaret(event.editor, event.caret?.logicalPosition, event.caret?.offset)
   }
 
-  private fun highlightForCaret(editor: Editor, pos: LogicalPosition?) {
-    if (pos == null || editor !is EditorImpl)
+  private fun highlightForCaret(editor: Editor, pos: LogicalPosition?, offset: Int?) {
+    if (pos == null || offset == null || editor !is EditorImpl)
       return
 
     val doc = editor.document
@@ -409,6 +409,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val defaultForeground = EditorColorsManager.getInstance().globalScheme.defaultForeground
     val background = if (debug) EditorColorsManager.getInstance().globalScheme.defaultForeground else null
     val newHighlights = ArrayList<RangeHighlighter>()
+    val column = offset - lineStart
 
     ligatures?.findAll(line)?.forEach { lig ->
       val elem = file.findElementAt(lineStart + lig.range.first)
@@ -419,7 +420,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
           lineStart + lig.range.first)
 
         if (mode == CursorMode.LINE ||
-            (mode == CursorMode.CURSOR && pos.column in lig.range.first..lig.range.last + extra + 1)) {
+            (mode == CursorMode.CURSOR && column in lig.range.first..lig.range.last + extra + 1)) {
           for (i in lig.range.first..lig.range.last + extra) {
             val colors = if (!debug) getHighlightColors(elem, category, lig.value, lineStart + i, 1,
                   syntaxHighlighter, editor, editor.colorsScheme, defaultForeground)
@@ -745,7 +746,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
               val defaultForeground = EditorColorsManager.getInstance().globalScheme.defaultForeground
 
               applyLigatureSpans(editor, syntaxHighlighter, defaultForeground, _spans!!)
-              highlightForCaret(editor, editor.caretModel.logicalPosition)
+              highlightForCaret(editor, editor.caretModel.logicalPosition, editor.caretModel.offset)
             }
           }
         }
