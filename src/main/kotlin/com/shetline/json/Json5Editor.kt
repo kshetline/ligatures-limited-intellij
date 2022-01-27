@@ -28,10 +28,10 @@ class Json5Editor(project: Project, value: String? = ""):
     isOneLineMode = false
     autoscrolls = true
 
-    if (scheme.defaultBackground.green < 128)
-      background = scheme.defaultBackground.darker()
+    background = if (scheme.defaultBackground.green < 128)
+      scheme.defaultBackground.darker()
     else
-      background = scheme.defaultBackground.brighter()
+      scheme.defaultBackground.brighter()
 
     addComponentListener(MyComponentAdapter())
   }
