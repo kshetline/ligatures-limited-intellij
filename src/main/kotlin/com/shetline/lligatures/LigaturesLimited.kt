@@ -122,7 +122,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     var lastDebugSpan: LigatureSpan? = null
     var lastDebugCategory: ElementCategory? = null
 
-    while (index < text.length && { match = ligatures.find(text, index); match }() != null) {
+    while (index < text.length && run { match = ligatures.find(text, index); match } != null) {
       val matchIndex = match!!.range.first
       val matchText = match!!.groupValues[0]
       val elem = file.findElementAt(matchIndex)
@@ -189,11 +189,14 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       }
     }
 
-    if (editor != null && languageId == null) {
+    if (editor != null && !editor.isDisposed && languageId == null) {
       if (editor is EditorImpl && !markupListeners.containsKey(editor))
         EditorMarkupListener(file, editor)
 
       ApplicationManager.getApplication().invokeLater {
+        if (editor.isDisposed)
+          return@invokeLater
+
         removePreviousHighlights(editor)
         cleanUpStrayHighlights(editor)
 
@@ -209,7 +212,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
   private fun applyLigatureSpans(editor: Editor, syntaxHighlighter: SyntaxHighlighter,
                                  defaultForeground: Color, spans: ArrayList<LigatureSpan>) {
-    if (editor !is EditorImpl || spans.isEmpty())
+    if (editor !is EditorImpl || !editor.isDisposed || spans.isEmpty())
       return
 
     val markupModel = editor.filteredDocumentMarkupModel
@@ -344,7 +347,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
   override fun clone(): HighlightVisitor = LigaturesLimited()
 
-  override fun createHighlightingPass(file: PsiFile, editor: Editor): TextEditorHighlightingPass? {
+  override fun createHighlightingPass(file: PsiFile, editor: Editor): TextEditorHighlightingPass {
     currentEditors[file] = editor
     currentFiles[editor] = file
 
@@ -383,7 +386,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   }
 
   private fun highlightForCaret(editor: Editor, pos: LogicalPosition?, offset: Int?) {
-    if (pos == null || offset == null || editor !is EditorImpl)
+    if (pos == null || offset == null || editor !is EditorImpl || editor.isDisposed)
       return
 
     val doc = editor.document
@@ -543,7 +546,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
   private fun getHighlighters(editor: Editor?): List<RangeHighlighter>
   {
-    if (editor !is EditorImpl)
+    if (editor !is EditorImpl || editor.isDisposed)
       return listOf()
 
     val highlighters = mutableListOf(*editor.markupModel.allHighlighters, *editor.filteredDocumentMarkupModel.allHighlighters)
@@ -565,7 +568,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   private fun removePreviousHighlights(editor: Editor?) {
     val oldHighlighters = syntaxHighlighters[editor]
 
-    if (oldHighlighters != null && editor is EditorImpl) {
+    if (oldHighlighters != null && editor is EditorImpl && !editor.isDisposed) {
       oldHighlighters.forEach { editor.filteredDocumentMarkupModel.removeHighlighter(it) }
       syntaxHighlighters.remove(editor)
     }
@@ -573,7 +576,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
   private fun cleanUpStrayHighlights(editor: Editor?)
   {
-    if (editor !is EditorImpl)
+    if (editor !is EditorImpl || editor.isDisposed)
       return
 
     val highlighters = arrayOf(*editor.filteredDocumentMarkupModel.allHighlighters)
@@ -656,7 +659,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   private fun getLanguageId(elem: PsiElement): String {
     var parent: PsiElement? = elem
 
-    while ({ parent = parent?.parent; parent }() != null && parent !is PsiFile) {
+    while (run { parent = parent?.parent; parent } != null && parent !is PsiFile) {
       if (parent!!.elementType.toString().endsWith(":CODE_FENCE")) {
         if (parent!!.children.size > 1) {
           val lang = parent!!.children[1]
@@ -740,7 +743,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
           }
 
           ApplicationManager.getApplication().invokeLater @Synchronized {
-            if (changes > 0 && _spans != null) {
+            if (!editor.isDisposed && changes > 0 && _spans != null) {
               val syntaxHighlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(file.language, file.project,
                 file.virtualFile)
               val defaultForeground = EditorColorsManager.getInstance().globalScheme.defaultForeground
