@@ -4,21 +4,21 @@ class Json5ToJson {
   companion object {
     fun json5toJson(j5: String): String {
       var index = 0
-      var match: MatchResult? = null
+      var match: MatchResult?
       val parts = mutableListOf<String>()
 
       // Separate quoted and non-quoted parts
-      while ({ match = Regex("""['"]""").find(j5, index); match }() != null) {
+      while (run { match = Regex("""['"]""").find(j5, index); match } != null) {
         val quote = match!!.value
         val startIndex = match!!.range.first
         var stringIndex = startIndex + 1
-        var stringMatch: MatchResult? = null
+        var stringMatch: MatchResult?
         val stringParts = mutableListOf<String>()
 
         parts.add(j5.substring(index, startIndex))
 
         // Find escaped characters or closing quote
-        while ({ stringMatch = Regex("\\\\(\\r\\n|\\r|\\n|.)|${quote}|\"").find(j5, stringIndex); stringMatch }() != null) {
+        while (run {stringMatch = Regex("\\\\(\\r\\n|\\r|\\n|.)|${quote}|\"").find(j5, stringIndex); stringMatch } != null) {
           val qOrE = stringMatch!!.value
 
           stringParts.add(j5.substring(stringIndex, stringMatch!!.range.first))
