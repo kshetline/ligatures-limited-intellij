@@ -24,11 +24,11 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
     loadState(SettingsState())
   }
 
-  override fun getState(): SettingsState? {
+  override fun getState(): SettingsState {
     return settingsState
   }
 
-  val extState: ExtSettingsState? get() = extSettingsState
+  val extState: ExtSettingsState get() = extSettingsState
 
   override fun loadState(state: SettingsState) {
     settingsState = state
@@ -156,7 +156,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
 
       var index = 0
 
-      while ({ index = other.indexOf(ligature, index); index }() >= 0) {
+      while (run { index = other.indexOf(ligature, index); index } >= 0) {
         if (index > 0)
           leadingSet.add(other[index - 1].toString())
 
@@ -182,18 +182,18 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
     val trailing = createLeadingOrTrailingClass(trailingSet)
     var pattern = ""
 
-    if (!leading.isNullOrEmpty()) // Create negative lookbehind, so this ligature isn't matched if preceded by these characters.
+    if (leading.isNotEmpty()) // Create negative lookbehind, so this ligature isn't matched if preceded by these characters.
       pattern += "(?<!$leading)"
 
     pattern += escapeForRegex(ligature)
 
-    if (!trailing.isNullOrEmpty()) // Create negative lookahead, so this ligature isn't matched if followed by these characters.
+    if (trailing.isNotEmpty()) // Create negative lookahead, so this ligature isn't matched if followed by these characters.
       pattern += "(?!$trailing)"
 
     return pattern
   }
 
-  private fun createLeadingOrTrailingClass(set: MutableSet<String>): String? {
+  private fun createLeadingOrTrailingClass(set: MutableSet<String>): String {
     if (set.isEmpty())
       return ""
     else if (set.size == 1)

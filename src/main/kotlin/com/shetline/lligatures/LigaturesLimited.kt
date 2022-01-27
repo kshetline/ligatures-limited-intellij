@@ -112,8 +112,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       }
     }
 
-    val debug = settings.state!!.debug
-    val ligatures = settings.extState!!.globalMatchLigatures!!
+    val debug = settings.state.debug
+    val ligatures = settings.extState.globalMatchLigatures!!
     var index = 0
     var match: MatchResult? = null
     val syntaxHighlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(file.language, file.project, file.virtualFile)
@@ -212,7 +212,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
   private fun applyLigatureSpans(editor: Editor, syntaxHighlighter: SyntaxHighlighter,
                                  defaultForeground: Color, spans: ArrayList<LigatureSpan>) {
-    if (editor !is EditorImpl || !editor.isDisposed || spans.isEmpty())
+    if (editor !is EditorImpl || editor.isDisposed || spans.isEmpty())
       return
 
     val markupModel = editor.filteredDocumentMarkupModel
@@ -284,7 +284,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
                                        matchText: String, matchIndex: Int
   ): LigaturesLimitedSettings.ContextConfig? {
     val category = inCategory ?: ElementCategorizer.categoryFor(elem, matchText, matchIndex)
-    val globalConfig = settings.extState!!.config!!
+    val globalConfig = settings.extState.config!!
     var langConfig: LigaturesLimitedSettings.LanguageConfig = globalConfig
 
     if (globalConfig.languages.containsKey(baseLanguage))
@@ -321,7 +321,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       return 0
 
     val matcher = if (config != null && (config as? LigaturesLimitedSettings.LanguageConfig)?.fullOnOrOff != true)
-      config.ligaturesMatch else settings.extState!!.globalMatchLigatures!!
+      config.ligaturesMatch else settings.extState.globalMatchLigatures!!
     val extendCandidate = text.substring(nextIndex - 2, nextIndex + 1)
     val searchStart = if (extendCandidate == "==/") 0 else 1 // Special case, since =/ by itself isn't a known ligature.
 
@@ -392,22 +392,22 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     val doc = editor.document
     val markupModel = editor.filteredDocumentMarkupModel
     val oldHighlights = cursorHighlighters[editor]
-    val mode = settings.state!!.cursorMode
+    val mode = settings.state.cursorMode
 
     if (oldHighlights != null) {
       oldHighlights.forEach { markupModel.removeHighlighter(it) }
       cursorHighlighters.remove(editor)
     }
 
-    if (settings.state!!.cursorMode == CursorMode.OFF)
+    if (settings.state.cursorMode == CursorMode.OFF)
       return
 
     val file = currentFiles[editor] ?: return
-    val ligatures = settings.extState!!.globalMatchLigatures
+    val ligatures = settings.extState.globalMatchLigatures
     val lineStart = doc.getLineStartOffset(pos.line)
     val lineEnd = if (pos.line < doc.lineCount - 1) doc.getLineStartOffset(pos.line + 1) else doc.textLength
     val line = doc.getText(TextRange(lineStart, lineEnd)).trimEnd()
-    val debug = settings.state!!.debug
+    val debug = settings.state.debug
     val syntaxHighlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(file.language, file.project, file.virtualFile)
     val defaultForeground = EditorColorsManager.getInstance().globalScheme.defaultForeground
     val background = if (debug) EditorColorsManager.getInstance().globalScheme.defaultForeground else null
