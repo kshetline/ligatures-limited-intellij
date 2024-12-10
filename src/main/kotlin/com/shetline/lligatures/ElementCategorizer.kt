@@ -31,7 +31,7 @@ class ElementCategorizer {
     private val opRegex = Regex("""[!-/:-@\[-^_`{-~]+""")
 
     fun categoryFor(element: PsiElement, matchText: String, matchIndex: Int, count: Int = 0): ElementCategory {
-      // Replace underscores with tildes so they act as regex word boundaries.
+      // Replace underscores with tildes, so they act as regex word boundaries.
       val type = element.elementType?.toString()?.replace(Regex("""[- _.]"""), "~")?.toLowerCase()
         ?.replace(Regex(""".*:"""), "") ?: "unknown"
       var isWhitespace = false

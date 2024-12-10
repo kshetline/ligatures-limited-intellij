@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.shetline"
-version = "1.0.3"
+version = "1.0.4"
 
 repositories {
   mavenCentral()
@@ -14,7 +14,7 @@ repositories {
 dependencies {
   implementation(kotlin("stdlib-jdk8"))
   implementation(kotlin("reflect"))
-  implementation("com.google.code.gson:gson:2.8.6")
+  implementation("com.google.code.gson:gson:2.8.9")
   // testCompile("junit", "junit", "4.12")
 }
 
@@ -45,6 +45,8 @@ tasks.withType<Jar> {
 
 tasks.getByName<org.jetbrains.intellij.tasks.PatchPluginXmlTask>("patchPluginXml") {
   changeNotes("""
+      <h2>1.0.4</h2>
+      <ul><li>Fix occasional exceptions thrown by disposed editors.</ul>
       <h2>1.0.3</h2>
       <ul><li>Fix handling of cursor position when tab characters are used for indentation.</ul>
       <h2>1.0.2</h2>

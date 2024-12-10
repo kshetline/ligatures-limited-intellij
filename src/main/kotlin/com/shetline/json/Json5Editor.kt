@@ -27,6 +27,12 @@ class Json5Editor(project: Project, value: String? = ""):
     font = Font(scheme.editorFontName, Font.PLAIN, scheme.editorFontSize)
     isOneLineMode = false
     autoscrolls = true
+
+    background = if (scheme.defaultBackground.green < 128)
+      scheme.defaultBackground.darker()
+    else
+      scheme.defaultBackground.brighter()
+
     addComponentListener(MyComponentAdapter())
   }
 

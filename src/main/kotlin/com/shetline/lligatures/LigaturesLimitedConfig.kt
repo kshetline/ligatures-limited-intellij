@@ -25,9 +25,9 @@ class LigaturesLimitedConfig : Configurable, Disposable {
 
   override fun isModified(): Boolean {
     return (
-      cursorMode.selectedItem != configState?.cursorMode ||
-      debug.isSelected != configState?.debug ||
-      jsonTrim(jsonConfig.text) != jsonTrim(configState?.json)
+      cursorMode.selectedItem != configState.cursorMode ||
+      debug.isSelected != configState.debug ||
+      jsonTrim(jsonConfig.text) != jsonTrim(configState.json)
     )
   }
 
@@ -43,18 +43,17 @@ class LigaturesLimitedConfig : Configurable, Disposable {
       throw ConfigurationException(e.message)
     }
 
-    configState?.cursorMode = cursorMode.selectedItem as CursorMode
-    configState?.debug = debug.isSelected
-    configState?.json = jsonTrim(jsonConfig.text)!!
+    configState.cursorMode = cursorMode.selectedItem as CursorMode
+    configState.debug = debug.isSelected
+    configState.json = jsonTrim(jsonConfig.text)!!
 
-    if (configState != null)
-      LigaturesLimitedSettings.instance.loadState(configState!!)
+    LigaturesLimitedSettings.instance.loadState(configState)
 
     ProjectManager.getInstance().openProjects.forEach()
       { project -> DaemonCodeAnalyzer.getInstance(project).restart() }
   }
 
-  override fun createComponent(): JComponent? {
+  override fun createComponent(): JComponent {
     cursorMode.addItem(CursorMode.OFF)
     cursorMode.addItem(CursorMode.CURSOR)
     cursorMode.addItem(CursorMode.LINE)
@@ -63,7 +62,7 @@ class LigaturesLimitedConfig : Configurable, Disposable {
     val projects = projectManager.openProjects
     val project = if (projects.isNotEmpty()) projects[0] else projectManager.defaultProject
     val parent = jsonConfig.parent
-    val newJsonConfig = Json5Editor(project, configState?.json)
+    val newJsonConfig = Json5Editor(project, configState.json)
 
     newJsonConfig.minimumSize = jsonConfig.minimumSize
     newJsonConfig.preferredSize = jsonConfig.preferredSize
