@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.shetline"
-version = "1.0.4"
+version = "1.0.5"
 
 repositories {
   mavenCentral()
@@ -18,10 +18,10 @@ dependencies {
   // testCompile("junit", "junit", "4.12")
 }
 
-intellij {
+ intellij {
   version = "IC-2020.3.2"
   updateSinceUntilBuild = false
-}
+ }
 
 configure<JavaPluginConvention> {
   sourceCompatibility = JavaVersion.VERSION_1_8
@@ -45,6 +45,8 @@ tasks.withType<Jar> {
 
 tasks.getByName<org.jetbrains.intellij.tasks.PatchPluginXmlTask>("patchPluginXml") {
   changeNotes("""
+      <h2>1.0.5</h2>
+      <ul><li>Fix a null exception.</ul>
       <h2>1.0.4</h2>
       <ul><li>Fix occasional exceptions thrown by disposed editors.</ul>
       <h2>1.0.3</h2>

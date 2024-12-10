@@ -97,7 +97,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       languageInfo.syntaxHighlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(file.language,
         file.project, file.virtualFile)
 
-    @Suppress("ConstantConditionIf")
     if (debugCategories) {
       notifyInfo("list element categories")
       var index = 0
@@ -480,21 +479,24 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
           style = style or (attrs.fontType and STYLE_MASK)
 
           if (specificColor == null) {
-            val (languageId, elemType) = getLanguageHints(attrs)!!
-            val languageInfo = languageLookup[languageId]
+            val (languageId, elemType) = getLanguageHints(attrs)
 
-            hintType = elemType
-            syntaxHighlighter = languageInfo?.syntaxHighlighter
+            if (elemType != null) {
+              val languageInfo = languageLookup[languageId]
 
-            if (syntaxHighlighter == null && languageInfo != null && editor != null) {
-              val file = currentFiles[editor]
+              hintType = elemType
+              syntaxHighlighter = languageInfo?.syntaxHighlighter
 
-              if (file != null)
-                languageInfo.syntaxHighlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(languageInfo.language,
-                  file.project, file.virtualFile)
-              }
+              if (syntaxHighlighter == null && languageInfo != null && editor != null) {
+                val file = currentFiles[editor]
 
-            continue
+                if (file != null)
+                  languageInfo.syntaxHighlighter = SyntaxHighlighterFactory.getSyntaxHighlighter(languageInfo.language,
+                    file.project, file.virtualFile)
+                }
+
+              continue
+            }
           }
 
           val highlightSpan = highlighter.endOffset - highlighter.startOffset
@@ -561,7 +563,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       val attrs = it.textAttrs(editor.colorsScheme)
 
       !isMyLayer(it.layer) && it.layer < HighlighterLayer.HYPERLINK &&
-      (attrs?.foregroundColor != null || getLanguageHints(attrs) != null)
+      (attrs?.foregroundColor != null || getLanguageHints(attrs).elemType != null)
     }
   }
 
@@ -595,10 +597,10 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   }
 
   data class LanguageHints(var languageId: String, var elemType: IElementType?)
-  private fun getLanguageHints(textAttrs: TextAttributes?): LanguageHints? {
+  private fun getLanguageHints(textAttrs: TextAttributes?): LanguageHints {
     if (textAttrs == null || textAttrs.foregroundColor != null || textAttrs.effectColor == null ||
         textAttrs.effectType != EffectType.WAVE_UNDERSCORE || textAttrs.effectColor !is ColorPayload)
-      return null
+      return LanguageHints("", null)
 
     val color = textAttrs.effectColor as ColorPayload
 
