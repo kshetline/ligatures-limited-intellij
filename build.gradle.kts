@@ -18,11 +18,6 @@ intellij {
 
 repositories {
   mavenCentral()
-
-//  intellijPlatform {
-//    releases()
-//    marketplace()
-//  }
 }
 
 tasks {
@@ -49,22 +44,4 @@ tasks {
   publishPlugin {
     token.set(System.getenv("PUBLISH_TOKEN"))
   }
-}
-
-tasks.getByName<org.jetbrains.intellij.tasks.PatchPluginXmlTask>("patchPluginXml") {
-//  changeNotes("""
-//    <h2>1.0.5</h2>
-//    <ul><li>Fix a null exception.</ul>
-//    <h2>1.0.4</h2>
-//    <ul><li>Fix occasional exceptions thrown by disposed editors.</ul>
-//    <h2>1.0.3</h2>
-//    <ul><li>Fix handling of cursor position when tab characters are used for indentation.</ul>
-//    <h2>1.0.2</h2>
-//    <ul><li>Fix bug where extension would fail to start when currently available languages could not be checked.</ul>
-//    <h2>1.0.1</h2>
-//    <ul><li>Recognize as a ligature four or more dashes, by themselves, without a leading <b>&lt;</b> or trailing <b>&gt;</b>.</ul>
-//    <h2>1.0.0</h2>
-//    <ul><li>First stable release</li></ul>
-//"""
-//  )
 }
