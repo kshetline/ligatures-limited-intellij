@@ -39,7 +39,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
     }
     catch (e: Exception) {
       LigaturesLimited.notify("Reverting to default settings due to invalid saved configuration: ${e.message}")
-      settingsState.json = defaultJson
+      settingsState.json = DEFAULT_JSON
       extSettingsState.config = parseJson(settingsState.json)
     }
 
@@ -49,7 +49,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
   open class SettingsState {
     var cursorMode = CursorMode.CURSOR
     var debug = false
-    var json = defaultJson
+    var json = DEFAULT_JSON
   }
 
   class ExtSettingsState(state: SettingsState) : SettingsState() {
@@ -132,7 +132,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
   private val charsNeedingRegexEscape = Regex("""[-\[\]/{}()*+?.\\^$|]""")
 
   private fun ligaturesToRegex(ligatures: Set<String>): Regex {
-    val sorted = ligatures.toList().sortedWith(Comparator { a, b -> b.length - a.length })
+    val sorted = ligatures.toList().sortedWith { a, b -> b.length - a.length }
     val escaped = sorted.map { lig -> patternSubstitutions[lig] ?: generatePattern(lig, ligatures.toSet()) }
 
     return Regex(escaped.joinToString("|"))
@@ -217,7 +217,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
   }
 
   // language=json5
-  const val defaultJson = """{
+  const val DEFAULT_JSON = """{
   "contexts": "operator punctuation comment_marker",
   "disregarded": "ff fi fl ffi ffl", // These ligatures will neither be actively enabled nor suppressed
   "languages": {
@@ -323,7 +323,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
 
             if (child.isJsonObject) {
               val inheritance = (child as JsonObject)["inherit"]
-              val parent = if (inheritance?.isString == true) languages[inheritance.asString.toLowerCase()]
+              val parent = if (inheritance?.isString == true) languages[inheritance.asString.lowercase()]
                 else baseConfig
 
               if (parent != null) {
@@ -410,7 +410,7 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
 
           for (contextName in getStringArray(key, true)) {
             try {
-              val category = ElementCategory.valueOf(contextName.toUpperCase())
+              val category = ElementCategory.valueOf(contextName.uppercase())
 
               contexts[category] = contextConfig
             }
@@ -465,30 +465,31 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
         var spec = spec0
 
         if (spec.length == 1) {
-          spec = spec.toUpperCase()
+          spec = spec.uppercase()
 
-          if (spec == "+") {
-            removeFromList = !listedAreEnabled
-            addToList = !removeFromList
+          when (spec) {
+            "+" -> {
+              removeFromList = !listedAreEnabled
+              addToList = !removeFromList
+            }
+            "-" -> {
+              removeFromList = listedAreEnabled
+              addToList = !removeFromList
+            }
+            "0", "O" -> {
+              ligatureList.clear()
+              addToList = true
+              listedAreEnabled = true
+              removeFromList = false
+            }
+            "X" -> {
+              ligatureList.clear()
+              addToList = true
+              removeFromList = false
+              listedAreEnabled = false
+            }
+            else -> throw JsonParseException("Invalid ligature specification")
           }
-          else if (spec == "-") {
-            removeFromList = listedAreEnabled
-            addToList = !removeFromList
-          }
-          else if (spec == "0" || spec == "O") {
-            ligatureList.clear()
-            addToList = true
-            listedAreEnabled = true
-            removeFromList = false
-          }
-          else if (spec == "X") {
-            ligatureList.clear()
-            addToList = true
-            removeFromList = false
-            listedAreEnabled = false
-          }
-          else
-            throw JsonParseException("Invalid ligature specification")
         }
         else if (spec.length > 1) {
           globalAddBacks.add(spec)
@@ -508,19 +509,18 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
       var enable = true
 
       for (spec0 in specs) {
-        val spec = spec0.toUpperCase()
+        val spec = spec0.uppercase()
 
         if (spec.length == 1) {
-          enable = if (spec == "+")
-            true
-          else if (spec == "-")
-            false
-          else if (spec == "0" || spec == "O") {
-            contextList.clear()
-            true
+          enable = when (spec) {
+            "+" -> true
+            "-" -> false
+            "0", "O" -> {
+              contextList.clear()
+              true
+            }
+            else -> throw JsonParseException("Invalid context specification")
           }
-          else
-            throw JsonParseException("Invalid context specification")
         }
         else if (spec.length > 1) {
           try {

@@ -1,28 +1,26 @@
 <idea-plugin>
-  <id>com.shetline.ligatures-limited</id>
+  <id>com.shetline.lligatures</id>
   <name>Ligatures Limited</name>
-  <vendor email="kerry@shetline.com" url="http://github.com/kshetline/ligatures-limited-intellij">Kerry Shetline</vendor>
-  <idea-version since-build="193.5233.102"/>
-
+  <vendor email="kerry@shetline.com" url="https://github.com/kshetline/ligatures-limited-intellij">Kerry Shetline</vendor>
   <description><![CDATA[
-    <h3>Code ligatures <i>only where you want them</i>, not where you don't.</h3><br>
+  <h3>Code ligatures <i>only where you want them</i>, not where you don't.</h3><br>
 
-    <p><a href="https://github.com/kshetline/ligatures-limited-intellij#ligatures-limited">README page
-      for <i>Ligatures Limited</i></a>, with full documentation.</p>
-    <br>
-    <p><i>Ligatures Limited</i> allows code ligatures, like those found in Fira Code and other fonts, to be
-      rendered only where they make the most sense — typically as operators and punctuation, for example,
-      <code>&lt;=</code> and <code>!=</code>. Everywhere else (using configurable rules) ligatures are
-      suppressed, so they don't do weird things inside strings and comments and the like.</p>
-    <br>
-    <p>Ligatures are also suppressed at the current insert cursor position, making it easier to see what
-      you're doing as you type. Optionally this can be done for all ligatures on the currently-edited line.</p>
-    <br>
-    <p>This plugin works automatically as soon as it is installed and enabled. See the control panel in
-      Settings/Preferences → Editor → Ligatures Limited to change options and configuration. Also make
-      sure in Settings/Preferences → Editor → Font that a ligature font has been selected, and
-      “Enable font ligatures” is checked.</p>
-    ]]></description>
+  <p><a href="https://github.com/kshetline/ligatures-limited-intellij#ligatures-limited">README page
+    for <i>Ligatures Limited</i></a>, with full documentation.</p>
+  <br>
+  <p><i>Ligatures Limited</i> allows code ligatures, like those found in Fira Code and other fonts, to be
+    rendered only where they make the most sense — typically as operators and punctuation, for example,
+    <code>&lt;=</code> and <code>!=</code>. Everywhere else (using configurable rules) ligatures are
+    suppressed, so they don't do weird things inside strings and comments and the like.</p>
+  <br>
+  <p>Ligatures are also suppressed at the current insert cursor position, making it easier to see what
+    you're doing as you type. Optionally this can be done for all ligatures on the currently-edited line.</p>
+  <br>
+  <p>This plugin works automatically as soon as it is installed and enabled. See the control panel in
+    Settings/Preferences → Editor → Ligatures Limited to change options and configuration. Also make
+    sure in Settings/Preferences → Editor → Font that a ligature font has been selected, and
+    “Enable font ligatures” is checked.</p>
+  ]]></description>
 
   <depends>com.intellij.modules.lang</depends>
   <depends>com.intellij.modules.platform</depends>

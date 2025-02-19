@@ -39,6 +39,7 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.tree.IElementType
 import com.intellij.psi.util.elementType
+import com.intellij.ui.JBColor
 import com.intellij.util.xmlb.XmlSerializerUtil.copyBean
 import com.jetbrains.rd.util.printlnError
 import com.shetline.lligatures.LigaturesLimitedSettings.CursorMode
@@ -68,7 +69,15 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
   override fun analyze(
       file: PsiFile, updateWholeFile: Boolean, holder: HighlightInfoHolder, action: Runnable): Boolean {
-    action.run()
+    try {
+      action.run()
+    }
+    catch (e: Throwable) {
+      if (e.message?.startsWith("Expected to set [null,java.awt.Color[") == true)
+        return false
+      else
+        throw e
+    }
 
     try {
       searchForLigatures(file, holder)
@@ -532,7 +541,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
             break
         }
       }
-      catch (e: Exception) {}
+      catch (_: Exception) {}
     }
 
     if (color == null) {
@@ -555,9 +564,9 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     markupListeners[editor]?.clearAccumulatedChanges()
 
-    highlighters.sortWith(Comparator { a, b ->
+    highlighters.sortWith { a, b ->
       if (a.startOffset != b.startOffset) a.startOffset - b.startOffset else a.endOffset - b.endOffset
-    })
+    }
 
     return highlighters.filter {
       val attrs = it.textAttrs(editor.colorsScheme)
@@ -583,9 +592,9 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
     val highlighters = arrayOf(*editor.filteredDocumentMarkupModel.allHighlighters)
 
-    highlighters.sortWith(Comparator { a, b ->
+    highlighters.sortWith { a, b ->
       if (a.startOffset != b.startOffset) a.startOffset - b.startOffset else b.endOffset - a.endOffset
-    })
+    }
 
     val strays = highlighters.filter {
       val attrs = it.textAttrs(editor.colorsScheme)
@@ -667,7 +676,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
           val lang = parent!!.children[1]
 
           if (lang.elementType.toString().endsWith(":FENCE_LANG"))
-            return lang.text.trim().toLowerCase()
+            return lang.text.trim().lowercase()
         }
 
         break
@@ -783,8 +792,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     var syntaxHighlighter: SyntaxHighlighter? = null
   )
 
-  class ColorPayload(var elementType: IElementType?, var language: String): Color(0, true)
-  class LLColor(rgb: Int) : Color(rgb)
+  class ColorPayload(var elementType: IElementType?, var language: String): JBColor(Color(0, true), Color(0, true))
+  class LLColor(rgb: Int) : JBColor(rgb, rgb)
 
   companion object {
     private const val MY_LIGATURE_BACKGROUND_LAYER = HighlighterLayer.HYPERLINK - 3
@@ -800,8 +809,8 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       ElementCategory.NUMBER, ElementCategory.OPERATOR, ElementCategory.REGEXP, ElementCategory.STRING,
       ElementCategory.TEXT)
 
-    private val DEBUG_GREEN = Color(0x009900)
-    private val DEBUG_RED = Color(0xDD0000)
+    private val DEBUG_GREEN = JBColor(0x009900, 0x009900)
+    private val DEBUG_RED = JBColor(0xDD0000, 0xDD0000)
     private val currentEditors = mutableMapOf<PsiFile, Editor>()
     private val currentFiles = mutableMapOf<Editor, PsiFile>()
     private val cursorHighlighters = mutableMapOf<Editor, List<RangeHighlighter>>()
@@ -864,7 +873,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
 
         languagesChecked = true
       }
-      catch (e: Exception) { }
+      catch (_: Exception) { }
     }
 
     private fun isMyLayer(layer: Int): Boolean {
@@ -912,7 +921,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private fun isWordy(s: String) = Regex("""\w+""").matches(s)
 
     fun normalizeLanguageId(id: String, handleAltNames: Boolean = false): String {
-      var newId = id.toLowerCase().replace(' ', '_')
+      var newId = id.lowercase().replace(' ', '_')
 
       if (handleAltNames)
         newId = newId.replace(Regex("""ecma.?script.*"""), "javascript")

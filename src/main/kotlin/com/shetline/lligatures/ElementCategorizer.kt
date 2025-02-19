@@ -32,7 +32,7 @@ class ElementCategorizer {
 
     fun categoryFor(element: PsiElement, matchText: String, matchIndex: Int, count: Int = 0): ElementCategory {
       // Replace underscores with tildes, so they act as regex word boundaries.
-      val type = element.elementType?.toString()?.replace(Regex("""[- _.]"""), "~")?.toLowerCase()
+      val type = element.elementType?.toString()?.replace(Regex("""[- _.]"""), "~")?.lowercase()
         ?.replace(Regex(""".*:"""), "") ?: "unknown"
       var isWhitespace = false
 
@@ -78,7 +78,7 @@ class ElementCategorizer {
       }
 
       if (element.parent.elementType != null) {
-        when (element.parent.elementType.toString().replace('_', '~').toLowerCase()) {
+        when (element.parent.elementType.toString().replace('_', '~').lowercase()) {
           "xml~doctype" ->
             return when {
               matchText.startsWith("<!") -> ElementCategory.TAG
