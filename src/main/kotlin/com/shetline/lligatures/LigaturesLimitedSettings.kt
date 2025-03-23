@@ -1,8 +1,8 @@
 package com.shetline.lligatures
 
 import com.google.gson.*
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.PersistentStateComponent
-import com.intellij.openapi.components.ServiceManager
 import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.shetline.json.Json5ToJson.Companion.json5toJson
@@ -234,7 +234,8 @@ class LigaturesLimitedSettings : PersistentStateComponent<LigaturesLimitedSettin
     }
 
     val instance: LigaturesLimitedSettings
-      get() = ServiceManager.getService(LigaturesLimitedSettings::class.java)
+      get() = ApplicationManager.getApplication().getService(LigaturesLimitedSettings::class.java)
+
 
     fun parseJson(json5: String): GlobalConfig {
       return gson.create().fromJson(json5toJson(json5), GlobalConfig::class.java)

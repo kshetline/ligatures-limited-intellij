@@ -23,20 +23,25 @@
   ]]></description>
 
   <change-notes><![CDATA[
+    <h2>1.0.7</h2>
+      <ul>
+         <li>Restore configuration UI.
+         <li>Update a deprecated method call.
+      </ul>
     <h2>1.0.6</h2>
-    <ul><li>Catch a color-related exception somewhere deep in GeneralHighlightingPass.</ul>
+      <ul><li>Catch a color-related exception somewhere deep in GeneralHighlightingPass.</ul>
     <h2>1.0.5</h2>
-    <ul><li>Fix a null exception.</ul>
+      <ul><li>Fix a null exception.</ul>
     <h2>1.0.4</h2>
-    <ul><li>Fix occasional exceptions thrown by disposed editors.</ul>
+      <ul><li>Fix occasional exceptions thrown by disposed editors.</ul>
     <h2>1.0.3</h2>
-    <ul><li>Fix handling of cursor position when tab characters are used for indentation.</ul>
+      <ul><li>Fix handling of cursor position when tab characters are used for indentation.</ul>
     <h2>1.0.2</h2>
-    <ul><li>Fix bug where extension would fail to start when currently available languages could not be checked.</ul>
+      <ul><li>Fix bug where extension would fail to start when currently available languages could not be checked.</ul>
     <h2>1.0.1</h2>
-    <ul><li>Recognize as a ligature four or more dashes, by themselves, without a leading <b>&lt;</b> or trailing <b>&gt;</b>.</ul>
+      <ul><li>Recognize as a ligature four or more dashes, by themselves, without a leading <b>&lt;</b> or trailing <b>&gt;</b>.</ul>
     <h2>1.0.0</h2>
-    <ul><li>First stable release</li></ul>
+      <ul><li>First stable release</ul>
   ]]></change-notes>
 
   <depends>com.intellij.modules.lang</depends>
@@ -50,7 +55,6 @@
     <applicationConfigurable instance="com.shetline.lligatures.LigaturesLimitedConfig"
                              groupId="editor" id="com.shetline.lligatures.LigaturesLimited"
                              displayName="Ligatures Limited"/>
-    <applicationService serviceImplementation="com.shetline.lligatures.LigaturesLimited"/>
     <applicationService serviceImplementation="com.shetline.lligatures.LigaturesLimitedSettings"/>
     <highlightVisitor implementation="com.shetline.lligatures.LigaturesLimited"/>
     <highlightingPassFactory implementation="com.shetline.lligatures.LigaturesLimited"/>

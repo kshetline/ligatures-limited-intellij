@@ -75,7 +75,7 @@ class Json5Editor(project: Project, value: String? = ""):
   private fun getKeys(component: JComponent, whichKeys: Int, default: String): List<String> {
     val keys = component.getFocusTraversalKeys(whichKeys)?.map { key -> key.toString() }
 
-    return if (keys == null || keys.isEmpty()) listOf(default) else keys
+    return if (keys.isNullOrEmpty()) listOf(default) else keys
   }
 
   private fun performAction(editor: EditorEx, action: EditorAction) {

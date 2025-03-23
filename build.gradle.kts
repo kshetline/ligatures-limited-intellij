@@ -5,14 +5,14 @@ plugins {
 }
 
 group = "com.shetline"
-version = "1.0.6"
+version = "1.0.7"
 
 // Configure Gradle IntelliJ Plugin
-// Read more: https://plugins.jetbrains.com/docs/intellij/tools-gradle-intellij-plugin.html
+// Read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html
 intellij {
   version.set("2023.1.5")
   type.set("IC") // Target IDE Platform
-
+  updateSinceUntilBuild.set(false)
   plugins.set(listOf(/* Plugin Dependencies */))
 }
 
@@ -32,7 +32,6 @@ tasks {
 
   patchPluginXml {
     sinceBuild.set("231")
-    untilBuild.set("241.*")
   }
 
   signPlugin {

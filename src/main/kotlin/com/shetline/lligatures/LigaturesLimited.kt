@@ -12,7 +12,6 @@ import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.notification.NotificationDisplayType
 import com.intellij.notification.NotificationGroup
 import com.intellij.notification.NotificationType
-import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.editor.Editor
@@ -20,9 +19,7 @@ import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.openapi.editor.colors.*
 import com.intellij.openapi.editor.event.CaretEvent
-import com.intellij.openapi.editor.event.CaretListener
 import com.intellij.openapi.editor.event.EditorFactoryEvent
-import com.intellij.openapi.editor.event.EditorFactoryListener
 import com.intellij.openapi.editor.ex.RangeHighlighterEx
 import com.intellij.openapi.editor.ex.util.LexerEditorHighlighter
 import com.intellij.openapi.editor.impl.EditorImpl
@@ -51,18 +48,42 @@ import java.lang.Thread.sleep
 import java.lang.reflect.Method
 
 class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycleListener, HighlightVisitor,
-    TextEditorHighlightingPassFactory, TextEditorHighlightingPassFactoryRegistrar, CaretListener,
-    EditorFactoryListener, Disposable {
+    TextEditorHighlightingPassFactory, TextEditorHighlightingPassFactoryRegistrar, LLListenerClient  {
   private val settings = LigaturesLimitedSettings.instance
   private val debugCategories = false
   private val infoType = HighlightInfoType.HighlightInfoTypeImpl(HighlightSeverity("MARKER", 1),
     CodeInsightColors.INFORMATION_ATTRIBUTES)
+  private val listener = LLListener(this)
 
-  override fun appFrameCreated(commandLineArgs: MutableList<String>) {
-    EditorFactory.getInstance().addEditorFactoryListener(this, this)
+  init {
+    if (oneTimeInitNeeded) {
+      try {
+        val constructor = NotificationGroup::class.java.getConstructor(String::class.java,
+          NotificationDisplayType::class.java, Boolean::class.java)
+
+        notifier = constructor.newInstance("Ligatures Limited", NotificationDisplayType.NONE, true)
+      }
+      catch (e: Exception) {
+        printlnError("Ligatures Limited: Failed to create NotificationGroup: ${e.message}")
+      }
+
+      // getTextAttributes() [In Kotlin, .textAttributes] is deprecated in IDEA 2020.2, but the non-deprecated
+      // replacement doesn't exist before 2020.2, so only by using reflection can I get rid of deprecation warnings,
+      // use the new API when available, and not give up pre-2020.2 compatibility.
+      getTextAttrsMethod = try {
+        RangeHighlighter::class.java.getMethod("getTextAttributes", EditorColorsScheme::class.java)
+      }
+      catch (e: NoSuchMethodException) {
+        RangeHighlighter::class.java.getMethod("getTextAttributes")
+      }
+
+      checkAvailableLanguages()
+      oneTimeInitNeeded = false
+    }
   }
 
-  override fun dispose() {
+  override fun appFrameCreated(commandLineArgs: MutableList<String>) {
+    EditorFactory.getInstance().addEditorFactoryListener(listener, listener)
   }
 
   override fun suitableForFile(file: PsiFile): Boolean = true
@@ -372,10 +393,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     )
   }
 
-  override fun editorCreated(event: EditorFactoryEvent) {
-    event.editor.caretModel.addCaretListener(this)
-  }
-
   override fun editorReleased(event: EditorFactoryEvent) {
     val editor = event.editor
 
@@ -386,7 +403,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     cursorHighlighters.remove(editor)
     syntaxHighlighters.remove(editor)
     markupListeners.remove(editor)
-    editor.caretModel.removeCaretListener(this)
   }
 
   override fun caretPositionChanged(event: CaretEvent) {
@@ -795,7 +811,9 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
   class ColorPayload(var elementType: IElementType?, var language: String): JBColor(Color(0, true), Color(0, true))
   class LLColor(rgb: Int) : JBColor(rgb, rgb)
 
+  @Suppress("CompanionObjectInExtension")
   companion object {
+    var oneTimeInitNeeded = true
     private const val MY_LIGATURE_BACKGROUND_LAYER = HighlighterLayer.HYPERLINK - 3
     private const val MY_LIGATURE_LAYER = HighlighterLayer.HYPERLINK - 2
     private const val MY_SELECTION_LAYER = HighlighterLayer.HYPERLINK - 1
@@ -818,7 +836,7 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
     private val markupListeners = mutableMapOf<Editor, EditorMarkupListener>()
     private var nextLanguageId = 0
     private var notifier: NotificationGroup? = null
-    private var getTextAttrsMethod: Method
+    private var getTextAttrsMethod: Method = Object::class.java.getMethod("hashCode") // only because an init value is needed
 
     private val cachedColors = mutableMapOf<Color, Array<Color?>>()
     private val NO_COLORS = arrayOf<Color?>(null, null)
@@ -830,33 +848,6 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
       asp, css, dtd, editorconfig, genericsql, gitexclude, gitignore, html, java, javascript, json, json5, jsp,
       jspx, jsregexp, kotlin, less, manifest, markdown, mysql, properties, regexp, sass, scss, shell_script, sql,
       sqlite, svg, text, typescript, typescript_jsx, xhtml, xml, yaml""".trim().split(Regex("""\s*,\s*""")).toSet()
-
-    init {
-      // For some reason simply using `NotificationGroup("Ligatures Limited", NotificationDisplayType.NONE, true)`
-      //   did not pass an IntelliJ compatibility test for IU-193.7288.26 although that constructor runs perfectly
-      //   well with IU-193.7288.26, and produces no warnings for later versions of IDEA.
-      try {
-        val constructor = NotificationGroup::class.java.getConstructor(String::class.java,
-            NotificationDisplayType::class.java, Boolean::class.java)
-
-        notifier = constructor.newInstance("Ligatures Limited", NotificationDisplayType.NONE, true)
-      }
-      catch (e: Exception) {
-        printlnError("Ligatures Limited: Failed to create NotificationGroup: ${e.message}")
-      }
-
-      // getTextAttributes() [In Kotlin, .textAttributes] is deprecated in IDEA 2020.2, but the non-deprecated
-      // replacement doesn't exist before 2020.2, so only by using reflection can I get rid of deprecation warnings,
-      // use the new API when available, and not give up pre-2020.2 compatibility.
-      getTextAttrsMethod = try {
-        RangeHighlighter::class.java.getMethod("getTextAttributes", EditorColorsScheme::class.java)
-      }
-      catch (e: NoSuchMethodException) {
-        RangeHighlighter::class.java.getMethod("getTextAttributes")
-      }
-
-      checkAvailableLanguages()
-    }
 
     private fun checkAvailableLanguages() {
       if (languagesChecked)
@@ -910,9 +901,9 @@ class LigaturesLimited : PersistentStateComponent<LigaturesLimited>, AppLifecycl
         val rgb = color.rgb and 0x00FFFFFF
 
         if (color.blue > 253)
-          cachedColors[color] = arrayOf<Color?>(LLColor(alpha or (rgb - 1)), LLColor(alpha or (rgb - 2)))
+          cachedColors[color] = arrayOf(LLColor(alpha or (rgb - 1)), LLColor(alpha or (rgb - 2)))
         else
-          cachedColors[color] = arrayOf<Color?>(LLColor(alpha or (rgb + 1)), LLColor(alpha or (rgb + 2)))
+          cachedColors[color] = arrayOf(LLColor(alpha or (rgb + 1)), LLColor(alpha or (rgb + 2)))
       }
 
       return cachedColors[color]!!
