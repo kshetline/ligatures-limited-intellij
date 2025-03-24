@@ -1,28 +1,48 @@
 <idea-plugin>
   <id>com.shetline.ligatures-limited</id>
   <name>Ligatures Limited</name>
-  <vendor email="kerry@shetline.com" url="http://github.com/kshetline/ligatures-limited-intellij">Kerry Shetline</vendor>
-  <idea-version since-build="193.5233.102"/>
-
+  <vendor email="kerry@shetline.com" url="https://github.com/kshetline/ligatures-limited-intellij">Kerry Shetline</vendor>
   <description><![CDATA[
-    <h3>Code ligatures <i>only where you want them</i>, not where you don't.</h3><br>
+  <h3>Code ligatures <i>only where you want them</i>, not where you don't.</h3><br>
 
-    <p><a href="https://github.com/kshetline/ligatures-limited-intellij#ligatures-limited">README page
-      for <i>Ligatures Limited</i></a>, with full documentation.</p>
-    <br>
-    <p><i>Ligatures Limited</i> allows code ligatures, like those found in Fira Code and other fonts, to be
-      rendered only where they make the most sense — typically as operators and punctuation, for example,
-      <code>&lt;=</code> and <code>!=</code>. Everywhere else (using configurable rules) ligatures are
-      suppressed, so they don't do weird things inside strings and comments and the like.</p>
-    <br>
-    <p>Ligatures are also suppressed at the current insert cursor position, making it easier to see what
-      you're doing as you type. Optionally this can be done for all ligatures on the currently-edited line.</p>
-    <br>
-    <p>This plugin works automatically as soon as it is installed and enabled. See the control panel in
-      Settings/Preferences → Editor → Ligatures Limited to change options and configuration. Also make
-      sure in Settings/Preferences → Editor → Font that a ligature font has been selected, and
-      “Enable font ligatures” is checked.</p>
-    ]]></description>
+  <p><a href="https://github.com/kshetline/ligatures-limited-intellij#ligatures-limited">README page
+    for <i>Ligatures Limited</i></a>, with full documentation.</p>
+  <br>
+  <p><i>Ligatures Limited</i> allows code ligatures, like those found in Fira Code and other fonts, to be
+    rendered only where they make the most sense — typically as operators and punctuation, for example,
+    <code>&lt;=</code> and <code>!=</code>. Everywhere else (using configurable rules) ligatures are
+    suppressed, so they don't do weird things inside strings and comments and the like.</p>
+  <br>
+  <p>Ligatures are also suppressed at the current insert cursor position, making it easier to see what
+    you're doing as you type. Optionally this can be done for all ligatures on the currently-edited line.</p>
+  <br>
+  <p>This plugin works automatically as soon as it is installed and enabled. See the control panel in
+    Settings/Preferences → Editor → Ligatures Limited to change options and configuration. Also make
+    sure in Settings/Preferences → Editor → Font that a ligature font has been selected, and
+    “Enable font ligatures” is checked.</p>
+  ]]></description>
+
+  <change-notes><![CDATA[
+    <h2>1.0.7</h2>
+      <ul>
+         <li>Restored missing configuration UI broken in newer IDE versions by the relocation Json5Language.
+         <li>Updated a deprecated method call.
+      </ul>
+    <h2>1.0.6</h2>
+      <ul><li>Catch a color-related exception somewhere deep in GeneralHighlightingPass.</ul>
+    <h2>1.0.5</h2>
+      <ul><li>Fixed a null exception.</ul>
+    <h2>1.0.4</h2>
+      <ul><li>Fixed occasional exceptions thrown by disposed editors.</ul>
+    <h2>1.0.3</h2>
+      <ul><li>Fixed handling of cursor position when tab characters are used for indentation.</ul>
+    <h2>1.0.2</h2>
+      <ul><li>Fixed a bug where the extension would fail to start when currently available languages could not be checked.</ul>
+    <h2>1.0.1</h2>
+      <ul><li>Recognize as a ligature four or more dashes, by themselves, without a leading <b>&lt;</b> or trailing <b>&gt;</b>.</ul>
+    <h2>1.0.0</h2>
+      <ul><li>First stable release</ul>
+  ]]></change-notes>
 
   <depends>com.intellij.modules.lang</depends>
   <depends>com.intellij.modules.platform</depends>
@@ -35,7 +55,6 @@
     <applicationConfigurable instance="com.shetline.lligatures.LigaturesLimitedConfig"
                              groupId="editor" id="com.shetline.lligatures.LigaturesLimited"
                              displayName="Ligatures Limited"/>
-    <applicationService serviceImplementation="com.shetline.lligatures.LigaturesLimited"/>
     <applicationService serviceImplementation="com.shetline.lligatures.LigaturesLimitedSettings"/>
     <highlightVisitor implementation="com.shetline.lligatures.LigaturesLimited"/>
     <highlightingPassFactory implementation="com.shetline.lligatures.LigaturesLimited"/>
