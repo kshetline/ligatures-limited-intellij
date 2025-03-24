@@ -23,9 +23,9 @@
   ]]></description>
 
   <change-notes><![CDATA[
-    <h2>1.0.7</h2>
+    <h2>1.0.7-fail.0</h2>
       <ul>
-         <li>Restored missing configuration UI broken in newer IDE versions by the relocation Json5Language.
+         <li><s>Restored missing configuration UI broken in newer IDE versions by the relocation Json5Language.</s>
          <li>Updated a deprecated method call.
       </ul>
     <h2>1.0.6</h2>

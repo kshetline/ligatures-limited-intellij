@@ -5,12 +5,12 @@ plugins {
 }
 
 group = "com.shetline"
-version = "1.0.7"
+version = "1.0.7-fail.0"
 
 // Configure Gradle IntelliJ Plugin
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html
 intellij {
-  version.set("2023.1.5")
+  version.set("2022.3.3")
   type.set("IC") // Target IDE Platform
   updateSinceUntilBuild.set(false)
 }

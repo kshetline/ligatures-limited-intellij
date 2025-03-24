@@ -1,7 +1,7 @@
 package com.shetline.json
 
 import com.intellij.ide.DataManager
-import com.intellij.lang.LanguageUtil
+import com.intellij.json.json5.Json5Language
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.editor.actionSystem.EditorAction
 import com.intellij.openapi.editor.actions.IndentSelectionAction
@@ -20,7 +20,7 @@ import javax.swing.JComponent
 import javax.swing.KeyStroke
 
 class Json5Editor(project: Project, value: String? = ""):
-    LanguageTextField(LanguageUtil.getLanguages { lang -> lang.id == "JSON5" }[0], project, value ?: "") {
+    LanguageTextField(Json5Language.INSTANCE, project, value ?: "") {
   init {
     val scheme = EditorColorsManager.getInstance().globalScheme
 
