@@ -13,7 +13,6 @@ intellij {
   version.set("2023.1.5")
   type.set("IC") // Target IDE Platform
   updateSinceUntilBuild.set(false)
-  plugins.set(listOf(/* Plugin Dependencies */))
 }
 
 repositories {
