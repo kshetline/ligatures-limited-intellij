@@ -23,6 +23,8 @@
   ]]></description>
 
   <change-notes><![CDATA[
+    <h2>1.0.8</h2>
+      <ul><li>Extended the compatibility of this plugin back to late 2021 IDE releases (>=212.5712.43).</ul>
     <h2>1.0.7</h2>
       <ul>
          <li>Restored missing configuration UI broken in newer IDE versions by the relocation Json5Language.
@@ -46,6 +48,7 @@
 
   <depends>com.intellij.modules.lang</depends>
   <depends>com.intellij.modules.platform</depends>
+  <depends>com.intellij.modules.json</depends>
 
   <applicationListeners>
     <listener class="com.shetline.lligatures.LigaturesLimited" topic="com.intellij.ide.AppLifecycleListener"/>

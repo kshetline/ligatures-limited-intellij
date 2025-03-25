@@ -1,11 +1,11 @@
 plugins {
   id("java")
-  id("org.jetbrains.kotlin.jvm") version "1.9.21"
+  id("org.jetbrains.kotlin.jvm") version "1.7.22"
   id("org.jetbrains.intellij") version "1.16.1"
 }
 
 group = "com.shetline"
-version = "1.0.7"
+version = "1.0.8"
 
 // Configure Gradle IntelliJ Plugin
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-intellij-platform-gradle-plugin.html
@@ -22,15 +22,15 @@ repositories {
 tasks {
   // Set the JVM compatibility versions
   withType<JavaCompile> {
-    sourceCompatibility = "17"
-    targetCompatibility = "17"
+    sourceCompatibility = "11"
+    targetCompatibility = "11"
   }
   withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-    kotlinOptions.jvmTarget = "17"
+    kotlinOptions.jvmTarget = "11"
   }
 
   patchPluginXml {
-    sinceBuild.set("231")
+    sinceBuild.set("212.5712.43")
   }
 
   signPlugin {
